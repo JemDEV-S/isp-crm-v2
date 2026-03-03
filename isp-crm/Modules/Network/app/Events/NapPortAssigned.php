@@ -1,0 +1,19 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Modules\Network\Events;
+
+use Illuminate\Foundation\Events\Dispatchable;
+use Illuminate\Queue\SerializesModels;
+use Modules\Network\Entities\NapPort;
+
+class NapPortAssigned
+{
+    use Dispatchable, SerializesModels;
+
+    public function __construct(
+        public readonly NapPort $napPort,
+        public readonly int $subscriptionId,
+    ) {}
+}

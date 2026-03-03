@@ -1,0 +1,12 @@
+{
+    "Core": true,
+    "AccessControl": true,
+    "Network": true,
+    "Inventory": true,
+    "Catalog": true,
+    "Workflow": true,
+    "Crm": true,
+    "Subscription": true,
+    "FieldOps": true,
+    "Finance": true
+}

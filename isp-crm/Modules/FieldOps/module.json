@@ -1,0 +1,11 @@
+{
+    "name": "FieldOps",
+    "alias": "fieldops",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\FieldOps\\Providers\\FieldOpsServiceProvider"
+    ],
+    "files": []
+}
