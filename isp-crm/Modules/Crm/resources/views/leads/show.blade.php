@@ -42,6 +42,11 @@
             </div>
             <div class="flex gap-2">
                 @if(!$lead->converted_at)
+                    @can('crm.lead.view')
+                        <a href="{{ route('crm.leads.onboarding', $lead) }}">
+                            <x-button variant="primary" icon="clipboard">Proceso de Alta</x-button>
+                        </a>
+                    @endcan
                     @can('crm.lead.convert')
                         <a href="#" @click.prevent="$dispatch('open-modal', 'convert-lead')">
                             <x-button variant="success" icon="check-circle">Convertir a Cliente</x-button>
@@ -182,6 +187,9 @@
                 @if(!$lead->converted_at)
                 <x-card title="Acciones">
                     <div class="space-y-2">
+                        <a href="{{ route('crm.leads.onboarding', $lead) }}" class="block">
+                            <x-button variant="secondary" class="w-full" icon="clipboard">Abrir Proceso de Alta</x-button>
+                        </a>
                         @can('crm.lead.update')
                             <a href="{{ route('crm.leads.edit', $lead) }}" class="block">
                                 <x-button variant="outline" class="w-full" icon="pencil">Editar</x-button>

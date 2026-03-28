@@ -21,12 +21,16 @@ Route::middleware(['web', 'auth'])->prefix('crm')->name('crm.')->group(function 
         Route::get('/', [LeadController::class, 'index'])->name('index');
         Route::get('/create', [LeadController::class, 'create'])->name('create');
         Route::post('/', [LeadController::class, 'store'])->name('store');
+        Route::get('/{lead}/onboarding', [LeadController::class, 'onboarding'])->name('onboarding');
         Route::get('/{lead}', [LeadController::class, 'show'])->name('show');
         Route::get('/{lead}/edit', [LeadController::class, 'edit'])->name('edit');
         Route::put('/{lead}', [LeadController::class, 'update'])->name('update');
         Route::delete('/{lead}', [LeadController::class, 'destroy'])->name('destroy');
 
         // Acciones específicas
+        Route::post('/{lead}/check-duplicates', [LeadController::class, 'checkDuplicates'])->name('check-duplicates');
+        Route::post('/{lead}/feasibility', [LeadController::class, 'checkFeasibility'])->name('feasibility');
+        Route::post('/{lead}/reserve-capacity', [LeadController::class, 'reserveCapacity'])->name('reserve-capacity');
         Route::post('/{lead}/convert', [LeadController::class, 'convert'])->name('convert');
         Route::patch('/{lead}/status', [LeadController::class, 'changeStatus'])->name('change-status');
         Route::patch('/{lead}/assign', [LeadController::class, 'assign'])->name('assign');

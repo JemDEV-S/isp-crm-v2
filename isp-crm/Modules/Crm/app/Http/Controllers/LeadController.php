@@ -7,11 +7,14 @@ namespace Modules\Crm\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Modules\AccessControl\Entities\User;
+use Modules\AccessControl\Entities\Zone;
 use Modules\Crm\DTOs\ConvertLeadDTO;
 use Modules\Crm\DTOs\CreateLeadDTO;
 use Modules\Crm\Entities\Lead;
 use Modules\Crm\Enums\LeadSource;
 use Modules\Crm\Enums\LeadStatus;
+use Modules\Crm\Services\CustomerOnboardingOrchestrator;
 use Modules\Crm\Services\FeasibilityService;
 use Modules\Crm\Services\LeadService;
 
@@ -20,6 +23,7 @@ class LeadController extends Controller
     public function __construct(
         protected LeadService $leadService,
         protected FeasibilityService $feasibilityService,
+        protected CustomerOnboardingOrchestrator $onboardingOrchestrator,
     ) {}
 
     public function index(Request $request)
@@ -31,17 +35,17 @@ class LeadController extends Controller
 
         $stats = $this->leadService->getStats();
 
-        return view('crm::leads.index', compact('leads', 'stats'));
+        return view('crm::leads.index', array_merge(compact('leads', 'stats'), $this->getLeadFormOptions()));
     }
 
     public function create()
     {
-        return view('crm::leads.create');
+        return view('crm::leads.create', $this->getLeadFormOptions());
     }
 
     public function edit(Lead $lead)
     {
-        return view('crm::leads.edit', compact('lead'));
+        return view('crm::leads.edit', array_merge(compact('lead'), $this->getLeadFormOptions()));
     }
 
     public function store(Request $request)
@@ -68,6 +72,28 @@ class LeadController extends Controller
     {
         $lead->load(['zone', 'assignedUser', 'createdByUser', 'customer', 'duplicateOf']);
         return view('crm::leads.show', compact('lead'));
+    }
+
+    public function onboarding(Lead $lead)
+    {
+        $lead->load([
+            'zone',
+            'assignedUser',
+            'createdByUser',
+            'customer',
+            'duplicateOf',
+            'feasibilityRequests' => fn ($query) => $query->latest('requested_at'),
+            'capacityReservations' => fn ($query) => $query->latest('expires_at'),
+        ]);
+
+        $onboarding = $this->onboardingOrchestrator->startOnboarding($lead->id);
+        $latestFeasibilityRequest = $lead->feasibilityRequests->first();
+        $activeReservation = $lead->capacityReservations->first(fn ($reservation) => $reservation->isActive());
+
+        return view('crm::leads.onboarding', array_merge(
+            compact('lead', 'onboarding', 'latestFeasibilityRequest', 'activeReservation'),
+            $this->getLeadFormOptions(),
+        ));
     }
 
     public function update(Request $request, Lead $lead)
@@ -235,5 +261,13 @@ class LeadController extends Controller
                 'statuses' => LeadStatus::toArray(),
             ],
         ]);
+    }
+
+    protected function getLeadFormOptions(): array
+    {
+        return [
+            'zones' => Zone::query()->orderBy('name')->get(['id', 'name']),
+            'users' => User::query()->orderBy('name')->get(['id', 'name']),
+        ];
     }
 }
