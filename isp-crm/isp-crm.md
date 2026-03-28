@@ -1369,6 +1369,294 @@ FASE 6: VALIDACIÓN Y ACTIVACIÓN
     - Actualizar métricas dashboard
 ```
 
+#### 6.1.A Especificación recomendada que debe prevalecer para implementación
+
+> La sección anterior describe el flujo base, pero no es suficiente como especificación ejecutable. Esta versión ampliada debe tomarse como la definición oficial del proceso de alta de cliente.
+
+#### Objetivo
+
+Garantizar que una venta solo avance a instalación y activación cuando existan validaciones comerciales, técnicas, documentarias y operativas completas.
+
+#### Resultado esperado
+
+Al finalizar el proceso deben existir, de forma consistente:
+
+- `Lead` cerrado como ganado o convertido
+- `Customer` creado y sin duplicados documentarios
+- `Address` normalizada y georreferenciada
+- `Subscription` en estado `active`
+- `ServiceInstance` aprovisionada y operativa
+- `WorkOrder` completada con evidencia
+- inventario consumido y trazable por serial o lote
+- factura inicial emitida según política comercial
+- bitácora completa de eventos, responsables y timestamps
+
+#### Actores involucrados
+
+| Actor | Responsabilidad |
+|-------|-----------------|
+| Ventas | Captación, calificación, oferta y cierre |
+| Coordinación | Agenda, asignación y control operativo |
+| Técnico | Instalación, evidencias, consumo de materiales |
+| Supervisor | Validación final y control de calidad |
+| Sistema | Validaciones, reservas, workflow, eventos, trazabilidad |
+
+#### Módulos involucrados
+
+`Crm`, `Network`, `Catalog`, `Subscription`, `Workflow`, `FieldOps`, `Inventory`, `Finance`, `AccessControl`
+
+#### Reglas de negocio obligatorias
+
+1. No se puede convertir un `Lead` a `Customer` si existe otro cliente activo con el mismo `document_type + document_number`, salvo autorización explícita y trazada.
+2. La dirección de servicio debe quedar georreferenciada antes de solicitar factibilidad o agendar instalación.
+3. La factibilidad debe devolver resultado estructurado: `feasible`, `feasible_with_conditions`, `not_feasible`.
+4. La factibilidad aprobada debe reservar capacidad técnica por una ventana limitada, por ejemplo `24 horas`, para evitar sobreventa.
+5. No se debe crear una `Subscription` si falta documentación mínima, aceptación contractual o dirección válida.
+6. El precio, promoción, instalación y condiciones comerciales deben congelarse en la suscripción al momento del cierre; no deben depender de lecturas futuras del catálogo.
+7. La activación comercial no debe ocurrir hasta que la instalación esté validada y el aprovisionamiento de red sea exitoso.
+8. El inventario serializado debe escanearse y validarse antes de asociarlo al cliente.
+9. Toda excepción operativa debe cerrar con causal estructurada, no con texto libre únicamente.
+10. Cada transición relevante debe generar evento de dominio, registro de auditoría y usuario responsable.
+
+#### Datos mínimos por etapa
+
+| Etapa | Datos obligatorios |
+|-------|--------------------|
+| Lead | nombre, teléfono, fuente, zona, canal, responsable |
+| Calificación | dirección, coordenadas, tipo de inmueble, disponibilidad horaria |
+| Contratación | documento, titular, plan, precio pactado, día de facturación, términos aceptados |
+| Agendamiento | franja horaria, técnico asignado, materiales reservados |
+| Instalación | serial/MAC ONU, potencia, fotos, firma o aceptación |
+| Activación | resultado de aprovisionamiento, fecha real de inicio, factura inicial |
+
+#### Flujo principal recomendado
+
+**Fase 1: Captación y deduplicación**
+
+1. Ventas crea `Lead` con datos mínimos.
+   - nombre o razón social
+   - teléfono principal
+   - canal de origen
+   - zona comercial
+   - responsable comercial
+   → Event: `LeadCreated`
+
+2. Sistema ejecuta deduplicación temprana.
+   - buscar coincidencias por documento, teléfono, email y dirección aproximada
+   - si detecta coincidencia, marcar `possible_duplicate`
+   - no bloquear automáticamente; enviar a revisión comercial
+   → Event: `LeadDuplicateDetected`
+
+3. Sistema asigna el lead según zona, carga de trabajo o regla de negocio.
+   → Event: `LeadAssigned`
+
+**Fase 2: Calificación comercial y técnica**
+
+4. Ventas contacta al prospecto y completa perfil comercial.
+   - tipo de cliente
+   - necesidad de servicio
+   - preferencia de plan
+   - ventana de instalación deseada
+   - consentimiento de tratamiento de datos si aplica
+
+5. Se registra dirección normalizada y coordenadas.
+   - usar catálogo geográfico consistente
+   - guardar referencia, fachada y punto GPS
+   - marcar calidad de georreferenciación
+
+6. Sistema ejecuta factibilidad técnica con salida estructurada.
+
+   ```php
+   final readonly class FeasibilityResult
+   {
+       public function __construct(
+           public string $status, // feasible|feasible_with_conditions|not_feasible
+           public ?int $napBoxId = null,
+           public ?int $napPortId = null,
+           public ?int $distanceMeters = null,
+           public array $conditions = [],
+           public ?string $reason = null,
+           public ?Carbon $reservationExpiresAt = null,
+       ) {}
+   }
+   ```
+
+7. Si la factibilidad es positiva:
+   - reservar NAP/puerto o capacidad lógica
+   - registrar vigencia de la reserva
+   - guardar costo estimado de instalación especial si aplica
+   → Event: `FeasibilityConfirmed`
+
+8. Si la factibilidad falla:
+   - registrar causal estructurada: sin cobertura, sin puertos, distancia excedida, requiere obra, datos insuficientes
+   - permitir cierre como `lost` o espera de expansión
+   → Event: `LeadFeasibilityRejected`
+
+**Fase 3: Cierre comercial y contractual**
+
+9. Ventas presenta oferta final.
+   - plan base
+   - addons
+   - promoción aplicada
+   - costo de instalación
+   - prorrata inicial
+   - fecha tentativa de instalación
+
+10. Cliente acepta condiciones.
+    - validar identidad y documentos
+    - validar unicidad documental
+    - registrar aceptación contractual
+    - opcional: OTP, firma digital o aceptación trazada
+
+11. Sistema convierte el lead.
+    - crear `Customer`
+    - crear `Address`
+    - crear `Contact` principal
+    - crear `Wallet` si la política financiera lo requiere
+    → Event: `LeadConverted`
+
+12. Sistema crea `Subscription` en estado `draft`.
+    - copiar precio pactado y cargos comerciales
+    - definir `billing_day`
+    - fijar fecha comprometida de instalación
+    - crear snapshot comercial del plan y promoción
+    → Event: `SubscriptionCreated`
+
+13. Sistema crea la `WorkOrder` de instalación e inicia workflow `installation`.
+    - estado inicial recomendado: `pending_schedule`
+    - relacionar suscripción, dirección, capacidad reservada y SLA
+    → Event: `InstallationWorkflowStarted`
+
+**Fase 4: Agenda y preparación operativa**
+
+14. Coordinación agenda visita.
+    - validar disponibilidad del cliente
+    - validar capacidad de cuadrilla
+    - validar SLA por zona
+    - crear `Appointment`
+    → Transition: `pending_schedule -> scheduled`
+    → Event: `InstallationScheduled`
+
+15. Coordinación asigna técnico o cuadrilla.
+    - considerar zona, skills, carga y stock disponible
+    - registrar responsable principal y apoyo
+    → Transition: `scheduled -> assigned`
+    → Event: `WorkOrderAssigned`
+
+16. Sistema prepara materiales.
+    - reservar ONU/router/cable/herrajes
+    - transferir a bodega móvil si aplica
+    - impedir asignación de serial ya comprometido en otra orden
+    → Event: `InstallationMaterialsReserved`
+
+**Fase 5: Ejecución en campo**
+
+17. Técnico inicia desplazamiento.
+    - check-in operativo
+    - transición `assigned -> in_transit`
+    - registrar timestamp y geolocalización
+    → Event: `TechnicianDispatched`
+
+18. Técnico llega al sitio.
+    - validar geofence contra la dirección
+    - registrar hora real de llegada
+    → Transition: `in_transit -> on_site`
+    → Event: `TechnicianArrived`
+
+19. Técnico inicia instalación.
+    - transición `on_site -> in_progress`
+    - escanear serial y MAC del equipo
+    - validar pertenencia del equipo al stock asignado
+    - registrar material consumido real
+
+20. Sistema aprovisiona el servicio.
+    - asignar IP o recurso lógico
+    - crear credenciales PPPoE o autorizar ONU
+    - enlazar equipo instalado con `ServiceInstance`
+    - guardar respuesta técnica completa del aprovisionamiento
+    → Event: `ProvisioningCompleted` o `ProvisioningFailed`
+
+21. Técnico cierra checklist.
+    - potencia óptica
+    - prueba de navegación
+    - fotos obligatorias
+    - firma o conformidad del cliente
+    - observaciones estructuradas
+    → Transition: `in_progress -> pending_validation`
+    → Event: `InstallationSubmittedForValidation`
+
+**Fase 6: Validación, activación y facturación**
+
+22. Supervisor valida la orden.
+    - revisar checklist, evidencias, potencia y aprovisionamiento
+    - si aprueba: `pending_validation -> completed`
+    - si rechaza: `pending_validation -> in_progress` con causal obligatoria
+    → Event: `InstallationValidated` o `InstallationRejected`
+
+23. Al completar la orden, el sistema ejecuta en transacción:
+    - confirmar consumo de inventario
+    - asociar seriales al cliente y a la suscripción
+    - activar `Subscription`
+    - fijar `start_date` real
+    - liberar reservas no consumidas
+    → Event: `SubscriptionActivated`
+
+24. `SubscriptionActivated` dispara procesos post-activación:
+    - generar factura inicial según política: instalación, prorrata, cargo adelantado o diferido
+    - enviar bienvenida y credenciales operativas
+    - programar facturación recurrente
+    - actualizar métricas comerciales y operativas
+    → Event: `InitialInvoiceGenerated`
+
+#### Excepciones obligatorias
+
+| Escenario | Acción requerida |
+|----------|------------------|
+| Duplicado detectado | cola de revisión, bloqueo de conversión sin resolución |
+| Factibilidad condicionada | aprobación supervisora o recotización |
+| No hay puertos o materiales | replanificar o cancelar con causal |
+| Cliente ausente | marcar visita fallida, costo opcional, reagendar |
+| Aprovisionamiento fallido | no activar suscripción, abrir incidencia técnica |
+| Validación rechazada | devolver a técnico con observaciones y SLA de corrección |
+| Instalación incompleta | estado intermedio, sin facturación de servicio activo |
+
+#### Controles faltantes detectados en la versión original
+
+- Detección de duplicados antes de convertir prospectos.
+- Reserva temporal de factibilidad para evitar vender capacidad inexistente.
+- Snapshot comercial de precio y promoción para evitar inconsistencias futuras.
+- Aceptación contractual y validación documental como condición de avance.
+- Causales estructuradas para rechazo, cancelación, no factibilidad y visita fallida.
+- Activación dentro de transacción de negocio, no como paso implícito aislado.
+- Separación clara entre `instalación terminada`, `instalación validada` y `suscripción activada`.
+- Evidencia obligatoria y checklist auditable antes de facturar.
+- Reglas de idempotencia para aprovisionamiento y generación de factura inicial.
+
+#### Eventos mínimos del dominio
+
+`LeadCreated`, `LeadDuplicateDetected`, `LeadAssigned`, `FeasibilityConfirmed`, `LeadFeasibilityRejected`, `LeadConverted`, `SubscriptionCreated`, `InstallationWorkflowStarted`, `InstallationScheduled`, `WorkOrderAssigned`, `InstallationMaterialsReserved`, `TechnicianDispatched`, `TechnicianArrived`, `ProvisioningCompleted`, `ProvisioningFailed`, `InstallationSubmittedForValidation`, `InstallationValidated`, `InstallationRejected`, `SubscriptionActivated`, `InitialInvoiceGenerated`
+
+#### KPIs recomendados
+
+- tasa de conversión lead a cliente
+- tiempo desde lead hasta instalación completada
+- porcentaje de factibilidad positiva por zona
+- tasa de instalaciones fallidas o reprogramadas
+- tiempo promedio de activación post-instalación
+- porcentaje de activaciones con retrabajo
+- margen por instalación considerando materiales y visita
+
+#### Criterios de cierre
+
+El proceso de alta se considera cerrado solo cuando:
+
+1. la suscripción está `active`
+2. la orden de trabajo está `completed`
+3. el aprovisionamiento está confirmado
+4. el inventario quedó conciliado
+5. la factura inicial fue emitida o diferida según política
+6. no existen validaciones pendientes ni reservas técnicas abiertas
+
 ### 6.2 Facturación Recurrente
 
 ```
@@ -1423,6 +1711,123 @@ Frecuencia: Diario a las 00:01
    - UpdateDebtAging
    - SchedulePaymentReminders
 ```
+#### 6.2.A Especificación recomendada que debe prevalecer para implementación
+
+> La facturación recurrente no debe verse solo como un job que crea facturas. Debe ser un proceso financiero idempotente, auditable, parametrizable y compatible con impuestos, promociones, prorratas, notas de crédito y reintentos seguros.
+
+#### Objetivo
+
+Emitir cargos periódicos correctos y trazables para cada suscripción facturable, sin duplicidades y respetando reglas comerciales, tributarias y operativas.
+
+#### Resultado esperado
+
+- una sola factura válida por período y por concepto recurrente
+- monto calculado desde snapshot comercial vigente de la suscripción
+- impuestos, descuentos y addons correctamente desglosados
+- recordatorios y acciones posteriores programadas
+- trazabilidad de cálculo, emisión, envío y posibles fallos
+
+#### Reglas de negocio obligatorias
+
+1. La facturación recurrente debe basarse en la suscripción y sus condiciones congeladas, no en valores vivos del catálogo.
+2. Debe existir una política explícita para facturación adelantada, vencida o al corte.
+3. No se debe generar una segunda factura del mismo período si ya existe una factura vigente o anulada que requiera tratamiento especial.
+4. Los cálculos deben ser idempotentes por `subscription_id + billing_period + invoice_type`.
+5. Los cambios de plan, suspensión, reactivación y cancelación deben afectar la facturación según fecha efectiva, no según fecha de registro.
+6. Toda factura debe almacenar su período facturado: `period_start`, `period_end`.
+7. La emisión debe soportar reintentos sin duplicar items ni correlativos.
+8. Si la integración fiscal falla, la factura debe quedar en estado intermedio controlado y no perderse.
+
+#### Datos y estructuras que faltan
+
+Campos recomendados en `Invoice`:
+
+- `billing_period`
+- `period_start`
+- `period_end`
+- `calculation_snapshot` (JSON)
+- `generation_source` (`scheduled`, `manual`, `adjustment`, `migration`)
+- `external_tax_status`
+- `issued_by_job_run_id`
+
+Campos recomendados en `InvoiceItem`:
+
+- `code`
+- `type` (`service`, `addon`, `discount`, `tax`, `proration`, `adjustment`)
+- `billing_period_start`
+- `billing_period_end`
+- `source_reference`
+
+#### Flujo principal recomendado
+
+1. El job `GenerateMonthlyInvoices` crea una ejecución identificable (`job_run_id`).
+2. Obtiene suscripciones elegibles:
+   - `status` facturable
+   - fecha efectiva dentro del período
+   - no canceladas antes del período
+   - sin factura previa válida del mismo ciclo
+3. Para cada suscripción, el sistema arma un `BillingContext`.
+   - plan pactado
+   - addons activos
+   - descuentos vigentes
+   - impuestos aplicables
+   - política de cobro
+   - período a facturar
+4. Calcula el cargo:
+   - mensualidad base
+   - prorrata si la fecha efectiva lo exige
+   - descuentos promocionales
+   - addons recurrentes
+   - ajustes manuales aprobados
+   - impuestos
+5. Valida reglas previas a emitir:
+   - no duplicidad del período
+   - customer y subscription vigentes
+   - datos fiscales mínimos completos
+6. Crea factura y detalle en transacción.
+7. Si existe integración tributaria, envía comprobante y actualiza estado.
+8. Dispara `InvoiceGenerated`.
+9. Los listeners programan recordatorios, actualizan aging y notifican por canales configurados.
+
+#### Excepciones obligatorias
+
+| Escenario | Acción requerida |
+|----------|------------------|
+| Suscripción suspendida sin cobro permitido | omitir y registrar motivo |
+| Suscripción activa con datos fiscales incompletos | generar incidencia operativa y cola de revisión |
+| Duplicidad detectada | bloquear emisión y registrar alerta |
+| Error tributario externo | estado `pending_tax_submission` o equivalente |
+| Error parcial en lote | continuar lote y registrar fallo por suscripción |
+| Ajuste manual no aprobado | excluir del cálculo |
+
+#### Controles faltantes detectados en la versión original
+
+- Período facturado explícito.
+- Idempotencia por período.
+- Snapshot de cálculo guardado en JSON.
+- Tratamiento de integración fiscal fallida.
+- Criterios claros de elegibilidad y exclusión.
+- Manejo de prorratas y ajustes como conceptos tipificados.
+
+#### Eventos mínimos del dominio
+
+`InvoiceGenerationStarted`, `InvoiceGenerated`, `InvoiceGenerationSkipped`, `InvoiceGenerationFailed`, `InvoiceDelivered`, `InvoiceTaxSubmissionFailed`
+
+#### KPIs recomendados
+
+- porcentaje de emisión exitosa por corrida
+- facturas omitidas por inconsistencia de datos
+- tiempo promedio de emisión por lote
+- tasa de fallos de integración fiscal
+- facturación emitida versus esperada por ciclo
+
+#### Criterios de cierre
+
+El proceso de facturación mensual se considera correcto cuando cada suscripción elegible quedó en uno de estos estados finales controlados:
+
+1. factura emitida correctamente
+2. factura pendiente de integración fiscal con trazabilidad
+3. factura omitida con motivo estructurado
 
 ### 6.3 Gestión de Mora (Dunning)
 
@@ -1499,6 +1904,114 @@ Frecuencia: Diario a las 08:00
    // Si cumple antes de promise_date → OK
    // Si no cumple → Corte automático al día siguiente
 ```
+#### 6.3.A Especificación recomendada que debe prevalecer para implementación
+
+> La gestión de mora no es solo una secuencia de recordatorios. Debe ser un motor de cobranza parametrizable, con evidencia, excepciones formales, promesas de pago, reglas de suspensión y protección contra acciones indebidas.
+
+#### Objetivo
+
+Gestionar la cartera vencida de manera automática y controlada, maximizando recuperación y minimizando cortes erróneos o acciones inconsistentes.
+
+#### Resultado esperado
+
+- cada deuda vencida clasificada por antigüedad y riesgo
+- acciones de cobranza ejecutadas una sola vez por tramo
+- suspensión solo cuando las reglas lo permiten
+- promesas de pago controladas y vencibles
+- trazabilidad completa de contacto, resultado y estado del servicio
+
+#### Reglas de negocio obligatorias
+
+1. La mora debe calcularse por documento financiero exigible, no solo por estado textual de factura.
+2. Las acciones de dunning deben ser configurables por producto, segmento o zona si el negocio lo requiere.
+3. No se debe suspender un servicio por una factura si existe disputa abierta, promesa vigente aprobada o acuerdo especial.
+4. Las acciones deben ser idempotentes por `invoice_id + action_type + stage`.
+5. Debe existir distinción entre `soft collection`, `suspension`, `pre-termination` y `write-off` o envío a cobranza externa.
+6. La suspensión debe registrar causal, usuario o job, timestamp y respuesta técnica de red.
+7. La reanudación del dunning después de una promesa incumplida debe estar automatizada.
+
+#### Datos y estructuras que faltan
+
+Entidades recomendadas:
+
+- `DunningPolicy`
+- `DunningStage`
+- `DunningExecution`
+- `CollectionCase`
+- `PromiseToPayApproval`
+- `InvoiceDispute`
+
+Campos recomendados en `PromiseToPay`:
+
+- `approved_by`
+- `approved_at`
+- `broken_at`
+- `max_extension_count`
+- `source_channel`
+
+#### Flujo principal recomendado
+
+1. El job `ProcessDunningActions` obtiene documentos vencidos elegibles.
+2. Calcula `days_overdue`, bucket de aging y riesgo.
+3. Evalúa exclusiones:
+   - promesa de pago vigente
+   - disputa abierta
+   - servicio en corte manual bloqueado
+   - cliente corporativo con política diferenciada
+4. Determina la etapa de cobranza según política.
+5. Ejecuta la acción solo si no fue ejecutada antes para esa etapa.
+6. Registra `DunningExecution` con:
+   - acción
+   - canal
+   - resultado
+   - payload
+   - correlation id
+7. Si corresponde suspensión:
+   - valida elegibilidad
+   - suspende suscripción
+   - ejecuta corte técnico
+   - deja evidencia del resultado
+8. Si la deuda supera umbral final:
+   - crear caso de cobranza
+   - marcar elegibilidad de cancelación o baja financiera según política
+
+#### Excepciones obligatorias
+
+| Escenario | Acción requerida |
+|----------|------------------|
+| Promesa de pago vigente | congelar acciones de corte hasta vencimiento |
+| Disputa abierta | excluir del motor automático |
+| Fallo de suspensión técnica | dejar suscripción en estado de revisión, no asumir corte exitoso |
+| Cliente con múltiples servicios | aplicar política por cuenta o por suscripción explícitamente |
+| Deuda parcialmente pagada | recalcular aging y etapa antes de actuar |
+
+#### Controles faltantes detectados en la versión original
+
+- Exclusión formal por disputa y acuerdos especiales.
+- Separación entre acción de cobranza y resultado técnico de suspensión.
+- Historial estructurado de ejecuciones de dunning.
+- Política configurable por segmento o servicio.
+- Tratamiento explícito de deuda parcial.
+
+#### Eventos mínimos del dominio
+
+`DunningStageTriggered`, `CollectionReminderSent`, `PromiseToPayCreated`, `PromiseToPayBroken`, `SubscriptionSuspensionRequested`, `SubscriptionSuspendedForDebt`, `CollectionCaseOpened`
+
+#### KPIs recomendados
+
+- recuperación por tramo de mora
+- porcentaje de suspensiones efectivas
+- promesas de pago cumplidas versus incumplidas
+- mora por antigüedad
+- tiempo promedio de recuperación
+
+#### Criterios de cierre
+
+La gestión de mora sobre un documento termina cuando:
+
+1. la deuda queda pagada
+2. existe acuerdo o disputa que la excluye temporalmente
+3. se envía a cobranza externa o castigo contable según política
 
 ### 6.4 Proceso de Pago y Reconexión
 
@@ -1585,6 +2098,113 @@ POST /api/webhooks/payment-gateway
    - SendReactivationNotification
 ```
 
+#### 6.4.A Especificación recomendada que debe prevalecer para implementación
+
+> El proceso de pago y reconexión debe ser tratado como conciliación financiera con efectos operativos, no solo como registro de un `Payment`.
+
+#### Objetivo
+
+Registrar pagos de forma segura, conciliarlos contra documentos pendientes y reactivar servicios suspendidos solo cuando realmente corresponde.
+
+#### Resultado esperado
+
+- pago registrado sin duplicidad
+- conciliación exacta contra una o varias facturas
+- saldo excedente abonado correctamente
+- reactivación automática o manual según reglas
+- auditoría de origen del pago y respuesta del canal
+
+#### Reglas de negocio obligatorias
+
+1. Todo pago debe ser idempotente por referencia externa y canal.
+2. El sistema debe soportar pago total, parcial, excedente, anticipo y pago sin referencia con conciliación posterior.
+3. La conciliación no debe depender solo del número de factura; debe soportar cuenta cliente y reglas de asignación.
+4. La reactivación solo procede si no quedan bloqueos financieros u operativos.
+5. El estado de la factura debe derivarse de la suma conciliada, no del último pago recibido.
+6. Debe existir separación entre `Payment`, `Allocation` y `Reconciliation`.
+7. Todo webhook debe validarse por firma, timestamp, replay protection e idempotency key.
+
+#### Datos y estructuras que faltan
+
+Entidades recomendadas:
+
+- `PaymentAllocation`
+- `PaymentReconciliation`
+- `PaymentWebhookLog`
+- `Refund`
+- `Chargeback`
+
+Campos recomendados en `Payment`:
+
+- `channel`
+- `external_id`
+- `idempotency_key`
+- `received_amount`
+- `currency`
+- `exchange_rate`
+- `reconciliation_status`
+
+#### Flujo principal recomendado
+
+1. Ingreso del pago por cualquier canal.
+2. Validación de autenticidad y duplicidad.
+3. Registro inicial del pago en estado `received` o `pending_validation`.
+4. Identificación del destino:
+   - factura específica
+   - cuenta cliente
+   - saldo a favor
+5. Conciliación mediante `PaymentAllocation`.
+6. Recalcular estado de cada factura afectada:
+   - `issued`
+   - `partially_paid`
+   - `paid`
+7. Si existe excedente:
+   - acreditarlo a `Wallet` o dejarlo como saldo no aplicado según política
+8. Si la suscripción estaba suspendida:
+   - verificar deuda residual
+   - verificar bloqueos no financieros
+   - solicitar reactivación
+9. Registrar resultado técnico de reconexión y notificar al cliente.
+
+#### Excepciones obligatorias
+
+| Escenario | Acción requerida |
+|----------|------------------|
+| Webhook repetido | reconocer y no duplicar pago |
+| Monto distinto al esperado | conciliar parcial o marcar a revisión |
+| Pago sin referencia | llevar a bandeja de conciliación |
+| Chargeback o reverso | generar débito compensatorio y reevaluar estado |
+| Reconexión técnica fallida | dejar pago conciliado, pero abrir incidencia operativa |
+
+#### Controles faltantes detectados en la versión original
+
+- Idempotencia fuerte de webhooks y referencias.
+- Modelo de asignación de pagos a múltiples documentos.
+- Soporte formal para saldos sin aplicar y pagos no referenciados.
+- Separación entre conciliación financiera y reconexión técnica.
+- Manejo de reversos, anulaciones y chargebacks.
+
+#### Eventos mínimos del dominio
+
+`PaymentReceived`, `PaymentValidated`, `PaymentAllocated`, `InvoicePaid`, `InvoicePartiallyPaid`, `WalletCredited`, `SubscriptionReactivationRequested`, `SubscriptionReactivated`, `PaymentReconciliationFailed`
+
+#### KPIs recomendados
+
+- tasa de conciliación automática
+- pagos no referenciados pendientes
+- tiempo promedio de reconexión tras pago
+- porcentaje de reconexiones fallidas
+- porcentaje de pagos duplicados detectados
+
+#### Criterios de cierre
+
+El proceso cierra cuando:
+
+1. el pago quedó validado y conciliado
+2. el documento afectado quedó con estado correcto
+3. el excedente fue aplicado o reservado
+4. la reconexión quedó ejecutada o derivada con incidencia formal
+
 ### 6.5 Cambio de Plan (Upgrade/Downgrade)
 
 ```
@@ -1634,6 +2254,114 @@ POST /api/webhooks/payment-gateway
    
    → Event: SubscriptionPlanChanged
 ```
+#### 6.5.A Especificación recomendada que debe prevalecer para implementación
+
+> El cambio de plan impacta facturación, aprovisionamiento, experiencia del cliente y márgenes. Debe manejarse como proceso contractual con fecha efectiva, validación técnica y reglas claras para upgrade y downgrade.
+
+#### Objetivo
+
+Modificar el plan de una suscripción sin romper consistencia comercial, técnica ni financiera.
+
+#### Resultado esperado
+
+- cambio registrado con trazabilidad de plan origen y destino
+- diferencia económica calculada correctamente
+- fecha efectiva clara
+- reconfiguración técnica exitosa o rollback controlado
+- impacto financiero reflejado en factura, nota de crédito o wallet
+
+#### Reglas de negocio obligatorias
+
+1. Todo cambio de plan debe guardar snapshot del plan anterior y del nuevo.
+2. Debe existir fecha efectiva del cambio: inmediata, próxima facturación o programada.
+3. Un downgrade no debe aplicarse de inmediato si viola permanencia mínima o política comercial.
+4. Un upgrade inmediato requiere validación de factibilidad técnica del nuevo perfil.
+5. El cálculo económico debe considerar ciclo restante, impuestos, promociones activas y cargos no recurrentes.
+6. El cambio debe ser idempotente por solicitud aprobada.
+7. Si la reconfiguración técnica falla, el sistema debe revertir o dejar el caso en estado controlado sin cobrar de más.
+
+#### Datos y estructuras que faltan
+
+Entidades recomendadas:
+
+- `PlanChangeRequest`
+- `PlanChangeApproval`
+- `PlanChangeExecution`
+
+Campos recomendados:
+
+- `effective_at`
+- `effective_mode`
+- `billing_adjustment_type`
+- `old_plan_snapshot`
+- `new_plan_snapshot`
+- `rollback_required`
+
+#### Flujo principal recomendado
+
+1. Cliente solicita cambio de plan.
+2. Sistema valida elegibilidad:
+   - suscripción activa
+   - sin bloqueo contractual
+   - cobertura técnica para el plan destino
+3. Calcula impacto económico:
+   - crédito por saldo no consumido del plan actual
+   - débito proporcional del plan nuevo
+   - impuestos y promociones
+4. Determina modalidad:
+   - `upgrade_immediate`
+   - `downgrade_next_cycle`
+   - `scheduled_change`
+5. Si requiere cobro adicional:
+   - generar documento por diferencia o dejar cargo programado
+6. Si genera saldo a favor:
+   - emitir nota de crédito o abonar a wallet según política
+7. Ejecuta el cambio en transacción controlada:
+   - actualizar suscripción
+   - registrar snapshots
+   - disparar reprovisión de red
+   - registrar resultado
+8. Confirmar al cliente fecha efectiva y nueva tarifa.
+
+#### Excepciones obligatorias
+
+| Escenario | Acción requerida |
+|----------|------------------|
+| Plan destino sin factibilidad | rechazar solicitud con causal |
+| Cambio durante promoción fija | exigir aprobación o postergar |
+| Falla en reprovisión | rollback o estado `pending_network_change` |
+| Diferencia negativa con política de no wallet | emitir crédito fiscal o saldo aplicado futuro |
+| Solicitudes concurrentes | permitir solo una solicitud abierta |
+
+#### Controles faltantes detectados en la versión original
+
+- Fecha efectiva formal del cambio.
+- Validación técnica previa al upgrade.
+- Snapshot contractual del plan origen y destino.
+- Manejo de concurrencia y solicitudes abiertas.
+- Rollback o estado de compensación si falla la reprovisión.
+- Distinción entre impacto financiero inmediato y programado.
+
+#### Eventos mínimos del dominio
+
+`PlanChangeRequested`, `PlanChangeApproved`, `PlanChangeRejected`, `PlakjjnChangeBilled`, `PlanChangeExecuted`, `PlanChangeProvisioningFailed`, `SubscriptionPlanChanged`
+
+#### KPIs recomendados
+
+- tasa de upgrades versus downgrades
+- tiempo promedio de ejecución del cambio
+- porcentaje de cambios con fallo técnico
+- ingreso incremental por upgrades
+- créditos generados por downgrades
+
+#### Criterios de cierre
+
+El cambio de plan cierra cuando:
+
+1. la solicitud quedó aprobada o rechazada con causal
+2. el impacto financiero quedó resuelto
+3. la configuración técnica quedó aplicada o compensada
+4. la suscripción refleja el nuevo plan con fecha efectiva correcta
 
 ---
 
