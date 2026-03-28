@@ -11,12 +11,16 @@ use Modules\Subscription\DTOs\CreateSubscriptionDTO;
 use Modules\Subscription\Entities\Subscription;
 use Modules\Subscription\Enums\BillingCycle;
 use Modules\Subscription\Enums\SubscriptionStatus;
+use Modules\Subscription\Services\ActivationService;
+use Modules\Subscription\Services\SubscriptionContractService;
 use Modules\Subscription\Services\SubscriptionService;
 
 class SubscriptionController extends Controller
 {
     public function __construct(
-        protected SubscriptionService $subscriptionService
+        protected SubscriptionService $subscriptionService,
+        protected SubscriptionContractService $subscriptionContractService,
+        protected ActivationService $activationService,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -78,6 +82,7 @@ class SubscriptionController extends Controller
                 'serviceInstance.napPort',
                 'addons',
                 'promotion',
+                'documents.validator',
                 'statusHistory.user',
                 'notes.user',
             ]),
@@ -98,6 +103,13 @@ class SubscriptionController extends Controller
                 'message' => $e->getMessage(),
             ], 422);
         }
+    }
+
+    public function activationReadiness(Subscription $subscription): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->activationService->getActivationReadiness($subscription),
+        ]);
     }
 
     public function suspend(Request $request, Subscription $subscription): JsonResponse
@@ -209,6 +221,64 @@ class SubscriptionController extends Controller
         return response()->json([
             'message' => 'Nota agregada exitosamente',
         ], 201);
+    }
+
+    public function addDocument(Request $request, Subscription $subscription): JsonResponse
+    {
+        $validated = $request->validate([
+            'document_type' => 'required|string|max:50',
+            'document_number' => 'nullable|string|max:30',
+            'file_path' => 'required|string|max:255',
+            'metadata' => 'nullable|array',
+        ]);
+
+        $document = $this->subscriptionContractService->attachDocument($subscription, $validated);
+
+        return response()->json([
+            'message' => 'Documento agregado exitosamente',
+            'data' => $document,
+        ], 201);
+    }
+
+    public function validateDocuments(Subscription $subscription): JsonResponse
+    {
+        $validated = $this->subscriptionContractService->validateDocuments($subscription, auth()->id());
+
+        if (!$validated) {
+            return response()->json([
+                'message' => 'La suscripción no tiene documentos suficientes para validación',
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'Documentos validados exitosamente',
+            'data' => $subscription->fresh(['documents.validator']),
+        ]);
+    }
+
+    public function acceptTerms(Request $request, Subscription $subscription): JsonResponse
+    {
+        $validated = $request->validate([
+            'method' => 'required|string|in:web,call_center,signature,presential',
+        ]);
+
+        try {
+            $subscription = $this->subscriptionContractService->recordAcceptance(
+                $subscription,
+                $validated['method'],
+                $request->ip(),
+                $request->userAgent()
+            );
+
+            return response()->json([
+                'message' => 'Aceptación de términos registrada exitosamente',
+                'data' => $subscription,
+            ]);
+        } catch (\DomainException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 422);
+        }
     }
 
     public function workflow(Subscription $subscription): JsonResponse

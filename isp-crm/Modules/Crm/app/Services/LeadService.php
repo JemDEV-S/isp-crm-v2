@@ -11,6 +11,7 @@ use Modules\Crm\DTOs\CreateLeadDTO;
 use Modules\Crm\Entities\Customer;
 use Modules\Crm\Entities\Lead;
 use Modules\Crm\Enums\LeadStatus;
+use Modules\Crm\Events\LeadDuplicateDetected;
 use Modules\Crm\Events\LeadConverted;
 use Modules\Crm\Events\LeadCreated;
 use Modules\Crm\Events\LeadStatusChanged;
@@ -18,29 +19,36 @@ use Modules\Crm\Events\LeadStatusChanged;
 class LeadService
 {
     public function __construct(
-        protected CustomerService $customerService
+        protected CustomerService $customerService,
+        protected DuplicateDetectionService $duplicateDetectionService,
     ) {}
 
     public function create(CreateLeadDTO $dto): Lead
     {
-        $lead = Lead::create($dto->toArray());
+        $lead = DB::transaction(function () use ($dto) {
+            $lead = Lead::create($this->normalizeDuplicateSensitiveData($dto->toArray()));
+            $this->syncDuplicateStatus($lead);
 
-        event(new LeadCreated($lead));
+            event(new LeadCreated($lead));
 
-        return $lead;
+            return $lead;
+        });
+
+        return $lead->fresh(['duplicateOf']);
     }
 
     public function update(Lead $lead, array $data): Lead
     {
         $oldStatus = $lead->status;
 
-        $lead->update($data);
+        $lead->update($this->normalizeDuplicateSensitiveData($data));
+        $this->syncDuplicateStatus($lead);
 
         if (isset($data['status']) && $oldStatus !== $lead->status) {
             event(new LeadStatusChanged($lead, $oldStatus, $lead->status));
         }
 
-        return $lead->fresh();
+        return $lead->fresh(['duplicateOf']);
     }
 
     public function changeStatus(Lead $lead, LeadStatus $newStatus): Lead
@@ -151,6 +159,7 @@ class LeadService
     {
         return [
             'total' => Lead::count(),
+            'duplicates' => Lead::where('is_duplicate', true)->count(),
             'new' => Lead::status(LeadStatus::NEW)->count(),
             'contacted' => Lead::status(LeadStatus::CONTACTED)->count(),
             'qualified' => Lead::status(LeadStatus::QUALIFIED)->count(),
@@ -158,6 +167,19 @@ class LeadService
             'lost' => Lead::status(LeadStatus::LOST)->count(),
             'conversion_rate' => $this->calculateConversionRate(),
         ];
+    }
+
+    public function checkDuplicates(Lead $lead): array
+    {
+        $matches = $this->duplicateDetectionService->detectDuplicateLeads($lead->toArray(), $lead->id);
+
+        return $matches->map(fn (array $match) => [
+            'lead_id' => $match['lead']->id,
+            'name' => $match['lead']->name,
+            'matched_by' => $match['matched_by'],
+            'status' => $match['lead']->status->value,
+            'is_converted' => $match['lead']->isConverted(),
+        ])->all();
     }
 
     protected function calculateConversionRate(): float
@@ -171,5 +193,50 @@ class LeadService
         $won = Lead::status(LeadStatus::WON)->count();
 
         return round(($won / $total) * 100, 2);
+    }
+
+    protected function syncDuplicateStatus(Lead $lead): void
+    {
+        $matches = $this->duplicateDetectionService->detectDuplicateLeads($lead->toArray(), $lead->id);
+        $firstMatch = $matches->first();
+
+        if ($firstMatch === null) {
+            if ($lead->is_duplicate) {
+                $this->duplicateDetectionService->resolveDuplicate($lead, 'auto_cleared');
+            }
+
+            return;
+        }
+
+        $matchedLead = $firstMatch['lead'];
+
+        $this->duplicateDetectionService->markAsDuplicate($lead, $matchedLead->id);
+
+        event(new LeadDuplicateDetected(
+            lead: $lead->fresh(),
+            matchedLead: $matchedLead,
+            matchedBy: $firstMatch['matched_by'],
+        ));
+    }
+
+    protected function normalizeDuplicateSensitiveData(array $data): array
+    {
+        if (array_key_exists('phone', $data) && $data['phone'] !== null) {
+            $data['phone'] = preg_replace('/\D+/', '', (string) $data['phone']);
+        }
+
+        if (array_key_exists('email', $data) && $data['email'] !== null) {
+            $data['email'] = trim(mb_strtolower((string) $data['email']));
+        }
+
+        if (array_key_exists('document_number', $data) && $data['document_number'] !== null) {
+            $data['document_number'] = trim(mb_strtolower((string) $data['document_number']));
+        }
+
+        if (array_key_exists('document_type', $data) && $data['document_type'] !== null) {
+            $data['document_type'] = trim(mb_strtolower((string) $data['document_type']));
+        }
+
+        return $data;
     }
 }

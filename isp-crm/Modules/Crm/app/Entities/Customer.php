@@ -97,6 +97,16 @@ class Customer extends Model
         return $this->hasMany(CustomerNote::class)->orderBy('is_pinned', 'desc')->orderBy('created_at', 'desc');
     }
 
+    public function wallet()
+    {
+        return $this->hasOne(\Modules\Finance\Entities\Wallet::class);
+    }
+
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(\Modules\Finance\Entities\Invoice::class);
+    }
+
     public function getDefaultServiceAddress(): ?Address
     {
         return $this->addresses()

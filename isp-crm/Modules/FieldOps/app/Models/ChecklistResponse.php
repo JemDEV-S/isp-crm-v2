@@ -34,7 +34,7 @@ class ChecklistResponse extends Model
 
     public function completedBy(): BelongsTo
     {
-        return $this->belongsTo(\Modules\AccessControl\app\Models\User::class, 'completed_by');
+        return $this->belongsTo(\Modules\AccessControl\Entities\User::class, 'completed_by');
     }
 
     public function isCompleted(): bool

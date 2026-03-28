@@ -35,7 +35,7 @@ class WorkOrderPhoto extends Model
 
     public function uploadedBy(): BelongsTo
     {
-        return $this->belongsTo(\Modules\AccessControl\app\Models\User::class, 'uploaded_by');
+        return $this->belongsTo(\Modules\AccessControl\Entities\User::class, 'uploaded_by');
     }
 
     public function hasLocation(): bool

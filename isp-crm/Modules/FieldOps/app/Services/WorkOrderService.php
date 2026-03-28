@@ -43,7 +43,11 @@ class WorkOrderService
 
             // Iniciar workflow si el tipo de orden lo tiene configurado
             if ($workOrderType->workflow_code) {
-                $workOrder->startWorkflow($workOrderType->workflow_code);
+                $workOrder->startWorkflow($workOrderType->workflow_code, [
+                    'customer_id' => $workOrder->customer_id,
+                    'address_id' => $workOrder->address_id,
+                    'subscription_id' => $workOrder->subscription_id,
+                ]);
             }
 
             event(new WorkOrderCreated($workOrder));
@@ -128,8 +132,8 @@ class WorkOrderService
             ]);
 
             // Ejecutar transición de workflow
-            if ($workOrder->canTransition('submit_completion')) {
-                $workOrder->executeTransition('submit_completion', [
+            if ($workOrder->canTransition('submit_validation')) {
+                $workOrder->executeTransition('submit_validation', [
                     'completed_by' => $dto->completedBy,
                     'materials_count' => count($dto->materials),
                     'photos_count' => count($dto->photos),

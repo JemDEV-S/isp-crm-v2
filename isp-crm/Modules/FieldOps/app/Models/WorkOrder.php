@@ -79,27 +79,27 @@ class WorkOrder extends Model
 
     public function subscription(): BelongsTo
     {
-        return $this->belongsTo(\Modules\Subscription\app\Models\Subscription::class);
+        return $this->belongsTo(\Modules\Subscription\Entities\Subscription::class);
     }
 
     public function customer(): BelongsTo
     {
-        return $this->belongsTo(\Modules\Crm\app\Models\Customer::class);
+        return $this->belongsTo(\Modules\Crm\Entities\Customer::class);
     }
 
     public function address(): BelongsTo
     {
-        return $this->belongsTo(\Modules\Crm\app\Models\Address::class);
+        return $this->belongsTo(\Modules\Crm\Entities\Address::class);
     }
 
     public function assignedTo(): BelongsTo
     {
-        return $this->belongsTo(\Modules\AccessControl\app\Models\User::class, 'assigned_to');
+        return $this->belongsTo(\Modules\AccessControl\Entities\User::class, 'assigned_to');
     }
 
     public function createdBy(): BelongsTo
     {
-        return $this->belongsTo(\Modules\AccessControl\app\Models\User::class, 'created_by');
+        return $this->belongsTo(\Modules\AccessControl\Entities\User::class, 'created_by');
     }
 
     public function appointment(): HasOne
@@ -125,6 +125,16 @@ class WorkOrder extends Model
     public function technicianLocations(): HasMany
     {
         return $this->hasMany(TechnicianLocation::class);
+    }
+
+    public function validation(): HasOne
+    {
+        return $this->hasOne(WorkOrderValidation::class);
+    }
+
+    public function exceptions(): HasMany
+    {
+        return $this->hasMany(WorkOrderException::class);
     }
 
     // Scopes

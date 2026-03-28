@@ -4,6 +4,8 @@ namespace Modules\FieldOps\Providers;
 
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
+use Modules\FieldOps\app\Services\GeofenceService;
+use Modules\FieldOps\app\Services\ValidationService;
 use Nwidart\Modules\Traits\PathNamespace;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -36,6 +38,8 @@ class FieldOpsServiceProvider extends ServiceProvider
     {
         $this->app->register(EventServiceProvider::class);
         $this->app->register(RouteServiceProvider::class);
+        $this->app->singleton(GeofenceService::class);
+        $this->app->singleton(ValidationService::class);
     }
 
     /**

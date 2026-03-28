@@ -17,6 +17,10 @@ use Modules\Crm\Events\CustomerUpdated;
 
 class CustomerService
 {
+    public function __construct(
+        protected AddressService $addressService,
+    ) {}
+
     public function create(CreateCustomerDTO $dto): Customer
     {
         return DB::transaction(function () use ($dto) {
@@ -87,16 +91,24 @@ class CustomerService
 
     public function createAddress(int $customerId, CreateAddressDTO $dto): Address
     {
-        $data = $dto->toArray();
+        $data = $this->addressService->normalize($dto->toArray());
         $data['customer_id'] = $customerId;
 
-        return Address::create($data);
+        $address = Address::create($data);
+        $this->addressService->geocode($address);
+
+        return $address->fresh();
     }
 
     public function addAddress(Customer $customer, array $addressData): Address
     {
         $addressData['customer_id'] = $customer->id;
-        return Address::create($addressData);
+        $addressData = $this->addressService->normalize($addressData);
+
+        $address = Address::create($addressData);
+        $this->addressService->geocode($address);
+
+        return $address->fresh();
     }
 
     public function paginate(array $filters = [], int $perPage = 15): LengthAwarePaginator

@@ -4,6 +4,8 @@ namespace Modules\Finance\Providers;
 
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
+use Modules\Finance\Services\InvoiceService;
+use Modules\Finance\Services\WalletService;
 use Nwidart\Modules\Traits\PathNamespace;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -36,6 +38,8 @@ class FinanceServiceProvider extends ServiceProvider
     {
         $this->app->register(EventServiceProvider::class);
         $this->app->register(RouteServiceProvider::class);
+        $this->app->singleton(WalletService::class);
+        $this->app->singleton(InvoiceService::class);
     }
 
     /**

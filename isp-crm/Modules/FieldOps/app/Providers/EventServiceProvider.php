@@ -3,28 +3,20 @@
 namespace Modules\FieldOps\Providers;
 
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
+use Modules\FieldOps\app\Listeners\EmitInstallationDomainEvents;
+use Modules\Workflow\Events\TransitionExecuted;
+use Modules\Workflow\Events\WorkflowStarted;
 
 class EventServiceProvider extends ServiceProvider
 {
-    /**
-     * The event handler mappings for the application.
-     *
-     * @var array<string, array<int, string>>
-     */
-    protected $listen = [];
+    protected $listen = [
+        WorkflowStarted::class => [
+            EmitInstallationDomainEvents::class . '@handleWorkflowStarted',
+        ],
+        TransitionExecuted::class => [
+            EmitInstallationDomainEvents::class . '@handleTransitionExecuted',
+        ],
+    ];
 
-    /**
-     * Indicates if events should be discovered.
-     *
-     * @var bool
-     */
-    protected static $shouldDiscoverEvents = true;
-
-    /**
-     * Configure the proper event listeners for email verification.
-     */
-    protected function configureEmailVerification(): void
-    {
-        //
-    }
+    protected static $shouldDiscoverEvents = false;
 }

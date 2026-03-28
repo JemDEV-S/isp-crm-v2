@@ -33,7 +33,7 @@ class Appointment extends Model
 
     public function confirmedBy(): BelongsTo
     {
-        return $this->belongsTo(\Modules\AccessControl\app\Models\User::class, 'confirmed_by');
+        return $this->belongsTo(\Modules\AccessControl\Entities\User::class, 'confirmed_by');
     }
 
     public function isConfirmed(): bool

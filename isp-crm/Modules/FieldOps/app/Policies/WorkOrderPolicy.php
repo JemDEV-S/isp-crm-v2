@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\FieldOps\app\Policies;
 
-use Modules\AccessControl\app\Models\User;
+use Modules\AccessControl\Entities\User;
 use Modules\FieldOps\app\Models\WorkOrder;
 
 class WorkOrderPolicy

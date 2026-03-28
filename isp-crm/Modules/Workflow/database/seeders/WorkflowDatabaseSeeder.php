@@ -12,6 +12,7 @@ class WorkflowDatabaseSeeder extends Seeder
     {
         $this->call([
             WorkflowDefinitionSeeder::class,
+            InstallationWorkflowSeeder::class,
         ]);
     }
 }

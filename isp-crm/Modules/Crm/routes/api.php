@@ -13,6 +13,9 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
         Route::post('/', [LeadController::class, 'store'])->name('leads.store');
         Route::get('/stats', [LeadController::class, 'stats'])->name('leads.stats');
         Route::get('/enums', [LeadController::class, 'enums'])->name('leads.enums');
+        Route::post('/{lead}/check-duplicates', [LeadController::class, 'checkDuplicates'])->name('leads.check-duplicates');
+        Route::post('/{lead}/feasibility', [LeadController::class, 'checkFeasibility'])->name('leads.feasibility');
+        Route::post('/{lead}/reserve-capacity', [LeadController::class, 'reserveCapacity'])->name('leads.reserve-capacity');
         Route::get('/{lead}', [LeadController::class, 'show'])->name('leads.show');
         Route::put('/{lead}', [LeadController::class, 'update'])->name('leads.update');
         Route::delete('/{lead}', [LeadController::class, 'destroy'])->name('leads.destroy');

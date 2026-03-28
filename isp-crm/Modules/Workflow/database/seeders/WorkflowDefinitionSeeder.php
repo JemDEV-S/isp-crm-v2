@@ -15,7 +15,6 @@ class WorkflowDefinitionSeeder extends Seeder
 {
     public function run(): void
     {
-        $this->createInstallationWorkflow();
         $this->createSupportTicketWorkflow();
         $this->createServiceCancellationWorkflow();
     }

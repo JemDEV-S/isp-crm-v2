@@ -6,6 +6,7 @@ namespace Modules\Crm\Entities;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
@@ -28,6 +29,9 @@ class Lead extends Model
         'email',
         'source',
         'status',
+        'is_duplicate',
+        'duplicate_of_id',
+        'duplicate_resolution',
         'notes',
         'zone_id',
         'assigned_to',
@@ -39,6 +43,7 @@ class Lead extends Model
         'source' => LeadSource::class,
         'status' => LeadStatus::class,
         'document_type' => DocumentType::class,
+        'is_duplicate' => 'boolean',
         'converted_at' => 'datetime',
     ];
 
@@ -76,6 +81,26 @@ class Lead extends Model
         return $this->hasOne(Customer::class);
     }
 
+    public function duplicateOf(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'duplicate_of_id');
+    }
+
+    public function duplicates(): HasMany
+    {
+        return $this->hasMany(self::class, 'duplicate_of_id');
+    }
+
+    public function feasibilityRequests(): HasMany
+    {
+        return $this->hasMany(FeasibilityRequest::class);
+    }
+
+    public function capacityReservations(): HasMany
+    {
+        return $this->hasMany(CapacityReservation::class);
+    }
+
     public function isConverted(): bool
     {
         return $this->converted_at !== null;
@@ -94,6 +119,11 @@ class Lead extends Model
     public function isFinal(): bool
     {
         return $this->status->isFinal();
+    }
+
+    public function isDuplicate(): bool
+    {
+        return $this->is_duplicate;
     }
 
     public function scopeStatus($query, LeadStatus $status)

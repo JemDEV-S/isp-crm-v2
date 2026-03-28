@@ -43,6 +43,11 @@ class Subscription extends Model
         'discount_percentage',
         'discount_months_remaining',
         'promotion_id',
+        'commercial_snapshot',
+        'terms_accepted_at',
+        'acceptance_method',
+        'acceptance_ip',
+        'acceptance_user_agent',
         'notes',
         'created_by',
     ];
@@ -58,6 +63,8 @@ class Subscription extends Model
         'installation_fee' => 'decimal:2',
         'discount_percentage' => 'decimal:2',
         'discount_months_remaining' => 'integer',
+        'commercial_snapshot' => 'array',
+        'terms_accepted_at' => 'datetime',
     ];
 
     protected static function boot(): void
@@ -135,6 +142,16 @@ class Subscription extends Model
         return $this->hasMany(SubscriptionNote::class)->orderBy('created_at', 'desc');
     }
 
+    public function documents(): HasMany
+    {
+        return $this->hasMany(SubscriptionDocument::class)->orderBy('created_at', 'desc');
+    }
+
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(\Modules\Finance\Entities\Invoice::class)->orderBy('created_at', 'desc');
+    }
+
     public function isActive(): bool
     {
         return $this->status->isActive();
@@ -148,6 +165,11 @@ class Subscription extends Model
     public function isFinal(): bool
     {
         return $this->status->isFinal();
+    }
+
+    public function hasAcceptedTerms(): bool
+    {
+        return $this->terms_accepted_at !== null;
     }
 
     public function canBeSuspended(): bool

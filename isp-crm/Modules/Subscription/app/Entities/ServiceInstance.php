@@ -25,6 +25,7 @@ class ServiceInstance extends Model
         'provisioned_at',
         'last_connection_at',
         'metadata',
+        'provision_data',
     ];
 
     protected $casts = [
@@ -32,6 +33,7 @@ class ServiceInstance extends Model
         'provisioned_at' => 'datetime',
         'last_connection_at' => 'datetime',
         'metadata' => 'array',
+        'provision_data' => 'array',
     ];
 
     protected $hidden = [
@@ -94,6 +96,16 @@ class ServiceInstance extends Model
     public function getMetadata(string $key, mixed $default = null): mixed
     {
         return $this->metadata[$key] ?? $default;
+    }
+
+    public function getProvisionData(string $key, mixed $default = null): mixed
+    {
+        return $this->provision_data[$key] ?? $default;
+    }
+
+    public function hasProvisionData(): bool
+    {
+        return !empty($this->provision_data);
     }
 
     public function scopeProvisioned($query)

@@ -27,7 +27,7 @@ class TechnicianLocation extends Model
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(\Modules\AccessControl\app\Models\User::class);
+        return $this->belongsTo(\Modules\AccessControl\Entities\User::class);
     }
 
     public function workOrder(): BelongsTo

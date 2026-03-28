@@ -17,6 +17,7 @@ use Modules\Network\Services\IpService;
 use Modules\Network\Services\NapService;
 use Modules\Network\Services\NetworkProvisioningService;
 use Modules\Network\Services\OltService;
+use Modules\Network\Services\ProvisioningService;
 use Modules\Network\Services\RouterOsService;
 use Nwidart\Modules\Traits\PathNamespace;
 use RecursiveDirectoryIterator;
@@ -79,6 +80,12 @@ class NetworkServiceProvider extends ServiceProvider
                 $app->make(NapService::class),
                 $app->make(RouterOsService::class),
                 $app->make(OltService::class),
+            );
+        });
+        $this->app->singleton(ProvisioningService::class, function ($app) {
+            return new ProvisioningService(
+                $app->make(NetworkProvisioningService::class),
+                $app->make(IpService::class),
             );
         });
     }

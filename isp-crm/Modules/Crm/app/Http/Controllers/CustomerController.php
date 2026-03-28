@@ -131,6 +131,8 @@ class CustomerController extends Controller
             'floor' => 'nullable|string|max:10',
             'apartment' => 'nullable|string|max:20',
             'reference' => 'nullable|string',
+            'address_reference' => 'nullable|string',
+            'photo_url' => 'nullable|url|max:255',
             'district' => 'required|string|max:100',
             'city' => 'required|string|max:100',
             'province' => 'required|string|max:100',

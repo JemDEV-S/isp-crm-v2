@@ -15,17 +15,16 @@ use Modules\Subscription\Entities\Subscription;
 use Modules\Subscription\Entities\SubscriptionStatusHistory;
 use Modules\Subscription\Enums\ProvisionStatus;
 use Modules\Subscription\Enums\SubscriptionStatus;
-use Modules\Subscription\Events\SubscriptionActivated;
 use Modules\Subscription\Events\SubscriptionCancelled;
 use Modules\Subscription\Events\SubscriptionCreated;
 use Modules\Subscription\Events\SubscriptionReactivated;
 use Modules\Subscription\Events\SubscriptionSuspended;
-use Modules\Workflow\Services\WorkflowService;
 
 class SubscriptionService
 {
     public function __construct(
-        protected WorkflowService $workflowService
+        protected SubscriptionContractService $subscriptionContractService,
+        protected ActivationService $activationService,
     ) {}
 
     public function create(CreateSubscriptionDTO $dto): Subscription
@@ -40,15 +39,14 @@ class SubscriptionService
                 'status' => SubscriptionStatus::DRAFT,
                 'billing_day' => $dto->billingDay,
                 'billing_cycle' => $dto->billingCycle,
-                'monthly_price' => $plan->price,
-                'installation_fee' => $plan->installation_fee,
                 'start_date' => $dto->startDate,
                 'contracted_months' => $dto->contractedMonths,
+                'monthly_price' => $plan->price,
+                'installation_fee' => $plan->installation_fee,
                 'promotion_id' => $dto->promotionId,
                 'notes' => $dto->notes,
             ]);
 
-            // Crear instancia de servicio
             ServiceInstance::create([
                 'subscription_id' => $subscription->id,
                 'pppoe_user' => $this->generatePppoeUser($subscription),
@@ -56,7 +54,6 @@ class SubscriptionService
                 'provision_status' => ProvisionStatus::PENDING,
             ]);
 
-            // Agregar addons
             foreach ($dto->addons as $addonId) {
                 $addon = Addon::find($addonId);
                 if ($addon) {
@@ -67,48 +64,36 @@ class SubscriptionService
                 }
             }
 
-            // Aplicar promoción si existe
             if ($dto->promotionId) {
                 $this->applyPromotion($subscription, $dto->promotionId);
             }
 
-            // Iniciar workflow de instalación
-            $this->workflowService->startWorkflow('installation', $subscription);
+            $subscription = $this->subscriptionContractService->initializeForSubscription($subscription->fresh([
+                'plan.parameters',
+                'addons',
+                'promotion',
+            ]));
 
-            // Cambiar estado a pendiente de instalación
-            $this->changeStatus($subscription, SubscriptionStatus::PENDING_INSTALLATION, 'Suscripción creada');
+            $this->changeStatus($subscription, SubscriptionStatus::PENDING_INSTALLATION, 'Suscripcion creada');
 
             event(new SubscriptionCreated($subscription));
 
-            return $subscription->fresh(['customer', 'plan', 'address', 'serviceInstance', 'addons']);
+            return $subscription->fresh(['customer', 'plan', 'address', 'serviceInstance', 'addons', 'documents']);
         });
     }
 
     public function activate(Subscription $subscription): Subscription
     {
-        if (!$subscription->status === SubscriptionStatus::PENDING_INSTALLATION) {
-            throw new \DomainException('Solo se pueden activar suscripciones pendientes de instalación');
-        }
-
-        $this->changeStatus($subscription, SubscriptionStatus::ACTIVE, 'Instalación completada');
-
-        $subscription->update([
-            'start_date' => $subscription->start_date ?? now(),
-        ]);
-
-        event(new SubscriptionActivated($subscription));
-
-        return $subscription->fresh();
+        return $this->activationService->activate($subscription);
     }
 
     public function suspend(Subscription $subscription, string $reason, bool $voluntary = false): Subscription
     {
         if (!$subscription->canBeSuspended()) {
-            throw new \DomainException('Esta suscripción no puede ser suspendida');
+            throw new \DomainException('Esta suscripcion no puede ser suspendida');
         }
 
         $newStatus = $voluntary ? SubscriptionStatus::SUSPENDED_VOLUNTARY : SubscriptionStatus::SUSPENDED;
-
         $this->changeStatus($subscription, $newStatus, $reason);
 
         event(new SubscriptionSuspended($subscription, $reason));
@@ -116,10 +101,10 @@ class SubscriptionService
         return $subscription->fresh();
     }
 
-    public function reactivate(Subscription $subscription, string $reason = 'Reactivación manual'): Subscription
+    public function reactivate(Subscription $subscription, string $reason = 'Reactivacion manual'): Subscription
     {
         if (!$subscription->canBeReactivated()) {
-            throw new \DomainException('Esta suscripción no puede ser reactivada');
+            throw new \DomainException('Esta suscripcion no puede ser reactivada');
         }
 
         $this->changeStatus($subscription, SubscriptionStatus::ACTIVE, $reason);
@@ -132,7 +117,7 @@ class SubscriptionService
     public function cancel(Subscription $subscription, string $reason): Subscription
     {
         if (!$subscription->canBeCancelled()) {
-            throw new \DomainException('Esta suscripción no puede ser cancelada');
+            throw new \DomainException('Esta suscripcion no puede ser cancelada');
         }
 
         $this->changeStatus($subscription, SubscriptionStatus::CANCELLED, $reason);
@@ -205,10 +190,10 @@ class SubscriptionService
             $search = $filters['search'];
             $query->where(function ($q) use ($search) {
                 $q->where('code', 'like', "%{$search}%")
-                  ->orWhereHas('customer', function ($q) use ($search) {
-                      $q->where('name', 'like', "%{$search}%")
-                        ->orWhere('code', 'like', "%{$search}%");
-                  });
+                    ->orWhereHas('customer', function ($customerQuery) use ($search) {
+                        $customerQuery->where('name', 'like', "%{$search}%")
+                            ->orWhere('code', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -246,7 +231,7 @@ class SubscriptionService
         $promotion = Promotion::findOrFail($promotionId);
 
         if (!$promotion->isValid()) {
-            throw new \DomainException('La promoción no es válida o ha expirado');
+            throw new \DomainException('La promocion no es valida o ha expirado');
         }
 
         $discountPercentage = 0;

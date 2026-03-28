@@ -12,12 +12,14 @@ use Modules\Crm\DTOs\CreateLeadDTO;
 use Modules\Crm\Entities\Lead;
 use Modules\Crm\Enums\LeadSource;
 use Modules\Crm\Enums\LeadStatus;
+use Modules\Crm\Services\FeasibilityService;
 use Modules\Crm\Services\LeadService;
 
 class LeadController extends Controller
 {
     public function __construct(
-        protected LeadService $leadService
+        protected LeadService $leadService,
+        protected FeasibilityService $feasibilityService,
     ) {}
 
     public function index(Request $request)
@@ -64,7 +66,7 @@ class LeadController extends Controller
 
     public function show(Lead $lead)
     {
-        $lead->load(['zone', 'assignedUser', 'createdByUser', 'customer']);
+        $lead->load(['zone', 'assignedUser', 'createdByUser', 'customer', 'duplicateOf']);
         return view('crm::leads.show', compact('lead'));
     }
 
@@ -118,6 +120,8 @@ class LeadController extends Controller
             'address.province' => 'required_with:address|string|max:100',
             'address.number' => 'nullable|string|max:20',
             'address.reference' => 'nullable|string',
+            'address.address_reference' => 'nullable|string',
+            'address.photo_url' => 'nullable|url|max:255',
             'address.latitude' => 'nullable|numeric',
             'address.longitude' => 'nullable|numeric',
             'address.zone_id' => 'nullable|exists:zones,id',
@@ -176,6 +180,51 @@ class LeadController extends Controller
         return response()->json([
             'data' => $this->leadService->getStats(),
         ]);
+    }
+
+    public function checkDuplicates(Lead $lead): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->leadService->checkDuplicates($lead),
+        ]);
+    }
+
+    public function checkFeasibility(Request $request, Lead $lead): JsonResponse
+    {
+        $validated = $request->validate([
+            'address_id' => 'nullable|exists:addresses,id',
+            'latitude' => 'required_without:address_id|numeric',
+            'longitude' => 'required_without:address_id|numeric',
+            'radius_meters' => 'nullable|integer|min:50|max:5000',
+        ]);
+
+        $result = $this->feasibilityService->check($lead->id, $validated);
+
+        return response()->json([
+            'message' => 'Factibilidad procesada exitosamente',
+            'data' => $result,
+        ]);
+    }
+
+    public function reserveCapacity(Request $request, Lead $lead): JsonResponse
+    {
+        $validated = $request->validate([
+            'nap_port_id' => 'required|exists:nap_ports,id',
+            'hours' => 'nullable|integer|min:1|max:168',
+            'feasibility_request_id' => 'nullable|exists:feasibility_requests,id',
+        ]);
+
+        $reservation = $this->feasibilityService->reserveCapacity(
+            napPortId: (int) $validated['nap_port_id'],
+            leadId: $lead->id,
+            hours: (int) ($validated['hours'] ?? 24),
+            feasibilityRequestId: isset($validated['feasibility_request_id']) ? (int) $validated['feasibility_request_id'] : null,
+        );
+
+        return response()->json([
+            'message' => 'Capacidad reservada exitosamente',
+            'data' => $reservation,
+        ], 201);
     }
 
     public function enums(): JsonResponse

@@ -32,21 +32,21 @@ class MaterialUsage extends Model
 
     public function product(): BelongsTo
     {
-        return $this->belongsTo(\Modules\Inventory\app\Models\Product::class);
+        return $this->belongsTo(\Modules\Inventory\Entities\Product::class);
     }
 
     public function serial(): BelongsTo
     {
-        return $this->belongsTo(\Modules\Inventory\app\Models\Serial::class);
+        return $this->belongsTo(\Modules\Inventory\Entities\Serial::class);
     }
 
     public function warehouse(): BelongsTo
     {
-        return $this->belongsTo(\Modules\Inventory\app\Models\Warehouse::class);
+        return $this->belongsTo(\Modules\Inventory\Entities\Warehouse::class);
     }
 
     public function recordedBy(): BelongsTo
     {
-        return $this->belongsTo(\Modules\AccessControl\app\Models\User::class, 'recorded_by');
+        return $this->belongsTo(\Modules\AccessControl\Entities\User::class, 'recorded_by');
     }
 }
