@@ -9,6 +9,7 @@ use Modules\Network\DTOs\ProvisionResultDTO;
 use Modules\Network\DTOs\ProvisionServiceDTO;
 use Modules\Network\Entities\IpAddress;
 use Modules\Network\Entities\NapPort;
+use Modules\Catalog\Entities\Plan;
 use Modules\Subscription\Entities\ServiceInstance;
 use Modules\Subscription\Entities\Subscription;
 
@@ -78,6 +79,37 @@ class ProvisioningService
         ]);
 
         return $serviceInstance->fresh(['ipAddress', 'napPort']);
+    }
+
+    /**
+     * Valida si el cambio a un nuevo plan es técnicamente factible.
+     */
+    public function validatePlanFeasibility(Subscription $subscription, Plan $newPlan): array
+    {
+        $conditions = [];
+        $feasible = true;
+        $reason = null;
+
+        // Verificar que el pool de IP del nuevo plan existe
+        if ($newPlan->ip_pool_id) {
+            $pool = \Modules\Network\Entities\IpPool::find($newPlan->ip_pool_id);
+            if (! $pool) {
+                $feasible = false;
+                $reason = 'El pool de IP del plan destino no existe.';
+                $conditions[] = 'ip_pool_not_found';
+            }
+        }
+
+        // Verificar que el plan tiene perfil de red configurado
+        if (empty($newPlan->router_profile) && empty($newPlan->olt_profile)) {
+            $conditions[] = 'no_network_profile';
+        }
+
+        return [
+            'feasible' => $feasible,
+            'conditions' => $conditions,
+            'reason' => $reason,
+        ];
     }
 
     protected function buildDtoFromSubscription(Subscription $subscription): ProvisionServiceDTO

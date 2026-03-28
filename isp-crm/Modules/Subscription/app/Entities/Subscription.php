@@ -49,6 +49,9 @@ class Subscription extends Model
         'acceptance_ip',
         'acceptance_user_agent',
         'notes',
+        'has_pending_plan_change',
+        'last_plan_change_at',
+        'minimum_stay_until',
         'created_by',
     ];
 
@@ -65,6 +68,9 @@ class Subscription extends Model
         'discount_months_remaining' => 'integer',
         'commercial_snapshot' => 'array',
         'terms_accepted_at' => 'datetime',
+        'has_pending_plan_change' => 'boolean',
+        'last_plan_change_at' => 'datetime',
+        'minimum_stay_until' => 'date',
     ];
 
     protected static function boot(): void
@@ -152,6 +158,36 @@ class Subscription extends Model
         return $this->hasMany(\Modules\Finance\Entities\Invoice::class)->orderBy('created_at', 'desc');
     }
 
+    public function promisesToPay(): HasMany
+    {
+        return $this->hasMany(\Modules\Finance\Entities\PromiseToPay::class);
+    }
+
+    public function collectionCases(): HasMany
+    {
+        return $this->hasMany(\Modules\Finance\Entities\CollectionCase::class);
+    }
+
+    public function planChangeRequests(): HasMany
+    {
+        return $this->hasMany(PlanChangeRequest::class)->orderBy('created_at', 'desc');
+    }
+
+    public function activePlanChangeRequest(): HasOne
+    {
+        return $this->hasOne(PlanChangeRequest::class)
+            ->whereIn('status', ['pending', 'approved', 'executing'])
+            ->latest();
+    }
+
+    public function hasActivePromise(): bool
+    {
+        return $this->promisesToPay()
+            ->where('status', 'pending')
+            ->where('promise_date', '>=', now()->startOfDay())
+            ->exists();
+    }
+
     public function isActive(): bool
     {
         return $this->status->isActive();
@@ -185,6 +221,24 @@ class Subscription extends Model
     public function canBeCancelled(): bool
     {
         return $this->status->canBeCancelled();
+    }
+
+    public function hasPendingPlanChange(): bool
+    {
+        return $this->has_pending_plan_change
+            || $this->activePlanChangeRequest()->exists();
+    }
+
+    public function isWithinMinimumStay(): bool
+    {
+        return $this->minimum_stay_until !== null
+            && $this->minimum_stay_until->isFuture();
+    }
+
+    public function canChangePlan(): bool
+    {
+        return $this->isActive()
+            && ! $this->hasPendingPlanChange();
     }
 
     public function getEffectivePrice(): float
@@ -257,5 +311,11 @@ class Subscription extends Model
     public function scopeForPlan($query, int $planId)
     {
         return $query->where('plan_id', $planId);
+    }
+
+    public function scopeBillableToday($query)
+    {
+        return $query->where('status', SubscriptionStatus::ACTIVE)
+            ->where('billing_day', now()->day);
     }
 }

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
+use Modules\Subscription\Http\Controllers\PlanChangeController;
 use Modules\Subscription\Http\Controllers\SubscriptionController;
 
 Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
@@ -23,8 +24,21 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
         Route::post('/{subscription}/documents/validate', [SubscriptionController::class, 'validateDocuments'])->name('subscriptions.validate-documents');
         Route::post('/{subscription}/accept-terms', [SubscriptionController::class, 'acceptTerms'])->name('subscriptions.accept-terms');
 
+        // Plan Change
+        Route::post('/{subscription}/plan-change/preview', [PlanChangeController::class, 'preview'])->name('subscriptions.plan-change.preview');
+        Route::post('/{subscription}/plan-change/request', [PlanChangeController::class, 'request'])->name('subscriptions.plan-change.request');
+        Route::get('/{subscription}/plan-change/history', [PlanChangeController::class, 'history'])->name('subscriptions.plan-change.history');
+
         // Workflow
         Route::get('/{subscription}/workflow', [SubscriptionController::class, 'workflow'])->name('subscriptions.workflow');
         Route::post('/{subscription}/workflow/transition', [SubscriptionController::class, 'executeTransition'])->name('subscriptions.execute-transition');
+    });
+
+    // Plan Change Request actions
+    Route::prefix('plan-changes')->group(function () {
+        Route::post('/{planChangeRequest}/approve', [PlanChangeController::class, 'approve'])->name('plan-changes.approve');
+        Route::post('/{planChangeRequest}/reject', [PlanChangeController::class, 'reject'])->name('plan-changes.reject');
+        Route::post('/{planChangeRequest}/execute', [PlanChangeController::class, 'execute'])->name('plan-changes.execute');
+        Route::post('/{planChangeRequest}/cancel', [PlanChangeController::class, 'cancel'])->name('plan-changes.cancel');
     });
 });

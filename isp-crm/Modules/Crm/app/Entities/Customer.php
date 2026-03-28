@@ -107,6 +107,11 @@ class Customer extends Model
         return $this->hasMany(\Modules\Finance\Entities\Invoice::class);
     }
 
+    public function payments(): HasMany
+    {
+        return $this->hasMany(\Modules\Finance\Entities\Payment::class);
+    }
+
     public function getDefaultServiceAddress(): ?Address
     {
         return $this->addresses()

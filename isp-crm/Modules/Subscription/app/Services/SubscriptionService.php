@@ -25,6 +25,7 @@ class SubscriptionService
     public function __construct(
         protected SubscriptionContractService $subscriptionContractService,
         protected ActivationService $activationService,
+        protected PlanChangeService $planChangeService,
     ) {}
 
     public function create(CreateSubscriptionDTO $dto): Subscription
@@ -133,26 +134,11 @@ class SubscriptionService
 
     public function changePlan(Subscription $subscription, int $newPlanId, bool $immediate = true): Subscription
     {
-        $newPlan = \Modules\Catalog\Entities\Plan::findOrFail($newPlanId);
-        $oldPlanId = $subscription->plan_id;
-
-        $subscription->update([
-            'plan_id' => $newPlanId,
-            'monthly_price' => $newPlan->price,
-        ]);
-
-        SubscriptionStatusHistory::create([
-            'subscription_id' => $subscription->id,
-            'from_status' => $subscription->status,
-            'to_status' => $subscription->status,
-            'reason' => "Cambio de plan: #{$oldPlanId} -> #{$newPlanId}",
-            'user_id' => auth()->id(),
-            'metadata' => [
-                'old_plan_id' => $oldPlanId,
-                'new_plan_id' => $newPlanId,
-                'immediate' => $immediate,
-            ],
-        ]);
+        $this->planChangeService->request(new \Modules\Subscription\DTOs\RequestPlanChangeDTO(
+            subscriptionId: $subscription->id,
+            newPlanId: $newPlanId,
+            effectiveMode: $immediate ? 'immediate' : 'next_cycle',
+        ));
 
         return $subscription->fresh(['plan']);
     }

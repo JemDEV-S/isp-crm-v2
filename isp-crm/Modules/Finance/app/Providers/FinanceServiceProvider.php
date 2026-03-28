@@ -2,9 +2,25 @@
 
 namespace Modules\Finance\Providers;
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\ServiceProvider;
+use Modules\Finance\Console\GenerateInvoicesCommand;
+use Modules\Finance\Console\ProcessDunningCommand;
+use Modules\Finance\Jobs\ProcessExpiredPromisesJob;
+use Modules\Finance\Jobs\RefreshAgingJob;
+use Modules\Finance\Services\AgingService;
+use Modules\Finance\Services\BillingCalculator;
+use Modules\Finance\Services\CollectionCaseService;
+use Modules\Finance\Services\DunningService;
+use Modules\Finance\Services\InvoiceDisputeService;
 use Modules\Finance\Services\InvoiceService;
+use Modules\Finance\Services\PaymentAllocationService;
+use Modules\Finance\Services\PaymentService;
+use Modules\Finance\Services\PaymentWebhookService;
+use Modules\Finance\Services\PromiseToPayService;
+use Modules\Finance\Services\ReconnectionService;
+use Modules\Finance\Services\RecurringBillingService;
 use Modules\Finance\Services\WalletService;
 use Nwidart\Modules\Traits\PathNamespace;
 use RecursiveDirectoryIterator;
@@ -40,6 +56,17 @@ class FinanceServiceProvider extends ServiceProvider
         $this->app->register(RouteServiceProvider::class);
         $this->app->singleton(WalletService::class);
         $this->app->singleton(InvoiceService::class);
+        $this->app->singleton(BillingCalculator::class);
+        $this->app->singleton(RecurringBillingService::class);
+        $this->app->singleton(DunningService::class);
+        $this->app->singleton(AgingService::class);
+        $this->app->singleton(PromiseToPayService::class);
+        $this->app->singleton(InvoiceDisputeService::class);
+        $this->app->singleton(CollectionCaseService::class);
+        $this->app->singleton(PaymentService::class);
+        $this->app->singleton(PaymentAllocationService::class);
+        $this->app->singleton(ReconnectionService::class);
+        $this->app->singleton(PaymentWebhookService::class);
     }
 
     /**
@@ -47,7 +74,10 @@ class FinanceServiceProvider extends ServiceProvider
      */
     protected function registerCommands(): void
     {
-        // $this->commands([]);
+        $this->commands([
+            GenerateInvoicesCommand::class,
+            ProcessDunningCommand::class,
+        ]);
     }
 
     /**
@@ -55,10 +85,28 @@ class FinanceServiceProvider extends ServiceProvider
      */
     protected function registerCommandSchedules(): void
     {
-        // $this->app->booted(function () {
-        //     $schedule = $this->app->make(Schedule::class);
-        //     $schedule->command('inspire')->hourly();
-        // });
+        $this->app->booted(function () {
+            $schedule = $this->app->make(Schedule::class);
+            $schedule->command('finance:generate-invoices --sync')
+                ->dailyAt('00:01')
+                ->withoutOverlapping()
+                ->onOneServer()
+                ->appendOutputTo(storage_path('logs/billing.log'));
+
+            $schedule->job(new RefreshAgingJob)
+                ->dailyAt('06:00')
+                ->withoutOverlapping();
+
+            $schedule->job(new ProcessExpiredPromisesJob)
+                ->dailyAt('07:00')
+                ->withoutOverlapping();
+
+            $schedule->command('finance:process-dunning --sync')
+                ->dailyAt('08:00')
+                ->withoutOverlapping()
+                ->onOneServer()
+                ->appendOutputTo(storage_path('logs/dunning.log'));
+        });
     }
 
     /**
