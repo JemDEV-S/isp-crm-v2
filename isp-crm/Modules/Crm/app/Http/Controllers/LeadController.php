@@ -14,7 +14,6 @@ use Modules\Crm\DTOs\CreateLeadDTO;
 use Modules\Crm\Entities\Lead;
 use Modules\Crm\Enums\LeadSource;
 use Modules\Crm\Enums\LeadStatus;
-use Modules\Crm\Services\CustomerOnboardingOrchestrator;
 use Modules\Crm\Services\FeasibilityService;
 use Modules\Crm\Services\LeadService;
 
@@ -23,7 +22,6 @@ class LeadController extends Controller
     public function __construct(
         protected LeadService $leadService,
         protected FeasibilityService $feasibilityService,
-        protected CustomerOnboardingOrchestrator $onboardingOrchestrator,
     ) {}
 
     public function index(Request $request)
@@ -86,7 +84,15 @@ class LeadController extends Controller
             'capacityReservations' => fn ($query) => $query->latest('expires_at'),
         ]);
 
-        $onboarding = $this->onboardingOrchestrator->startOnboarding($lead->id);
+        $onboarding = [
+            'lead_id' => $lead->id,
+            'is_duplicate' => $lead->is_duplicate,
+            'duplicate_matches' => $this->leadService->checkDuplicates($lead),
+            'feasibility_requests' => $lead->feasibilityRequests->count(),
+            'active_capacity_reservations' => $lead->capacityReservations
+                ->filter(fn ($reservation) => $reservation->isActive())
+                ->count(),
+        ];
         $latestFeasibilityRequest = $lead->feasibilityRequests->first();
         $activeReservation = $lead->capacityReservations->first(fn ($reservation) => $reservation->isActive());
 
