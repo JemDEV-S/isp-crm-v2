@@ -136,6 +136,19 @@
                     </dl>
                 </x-card>
 
+                <x-card title="Ubicacion">
+                    <x-geo-point-picker
+                        latitude-name="latitude"
+                        longitude-name="longitude"
+                        :latitude-value="$napBox->latitude"
+                        :longitude-value="$napBox->longitude"
+                        help="Vista de la ubicacion registrada para esta caja NAP."
+                        height="18rem"
+                        :readonly="true"
+                        :show-inputs="false"
+                    />
+                </x-card>
+
                 <!-- Puertos -->
                 <x-card title="Puertos">
                     <x-slot name="header">

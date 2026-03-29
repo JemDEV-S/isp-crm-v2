@@ -148,7 +148,7 @@
                                 <div class="ml-3">
                                     <div class="text-sm font-medium text-secondary-900">{{ $lead->name }}</div>
                                     @if($lead->document_number)
-                                        <div class="text-xs text-secondary-500">{{ strtoupper($lead->document_type) }}: {{ $lead->document_number }}</div>
+                                        <div class="text-xs text-secondary-500">{{ $lead->document_type?->label() ?? 'Documento' }}: {{ $lead->document_number }}</div>
                                     @endif
                                 </div>
                             </div>
@@ -161,7 +161,7 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <x-badge variant="default" size="sm">
-                                {{ ucfirst(str_replace('_', ' ', $lead->source)) }}
+                                {{ $lead->source?->label() ?? 'Sin fuente' }}
                             </x-badge>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
@@ -176,8 +176,8 @@
                                     'lost' => 'danger',
                                 ];
                             @endphp
-                            <x-badge :variant="$statusColors[$lead->status] ?? 'default'" dot>
-                                {{ ucfirst(str_replace('_', ' ', $lead->status)) }}
+                            <x-badge :variant="$statusColors[$lead->status->value] ?? 'default'" dot>
+                                {{ $lead->status->label() }}
                             </x-badge>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-secondary-500">

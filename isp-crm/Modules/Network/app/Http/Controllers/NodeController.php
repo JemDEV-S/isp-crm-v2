@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace Modules\Network\Http\Controllers;
 
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\View\View;
 use Modules\Network\DTOs\CreateNodeDTO;
+use Modules\Network\Entities\FiberRoute;
+use Modules\Network\Entities\NapBox;
+use Modules\Network\Entities\NapPort;
 use Modules\Network\Entities\Node;
 use Modules\Network\Http\Requests\StoreNodeRequest;
 use Modules\Network\Http\Requests\UpdateNodeRequest;
@@ -17,7 +21,7 @@ class NodeController extends Controller
 {
     public function __construct()
     {
-        $this->middleware('permission:network.node.view')->only(['index', 'show']);
+        $this->middleware('permission:network.node.view')->only(['index', 'show', 'topology']);
         $this->middleware('permission:network.node.create')->only(['create', 'store']);
         $this->middleware('permission:network.node.update')->only(['edit', 'update']);
         $this->middleware('permission:network.node.delete')->only('destroy');
@@ -51,6 +55,19 @@ class NodeController extends Controller
         $nodes = $query->orderBy('name')->paginate(15);
 
         return view('network::nodes.index', compact('nodes'));
+    }
+
+    public function topology(): View
+    {
+        $stats = [
+            'nodes' => Node::count(),
+            'active_nodes' => Node::where('status', 'active')->count(),
+            'nap_boxes' => NapBox::count(),
+            'free_ports' => NapPort::where('status', 'free')->count(),
+            'fiber_routes' => FiberRoute::count(),
+        ];
+
+        return view('network::topology', compact('stats'));
     }
 
     /**
@@ -132,12 +149,28 @@ class NodeController extends Controller
     /**
      * Get nodes as JSON for maps/selects.
      */
-    public function json(Request $request): \Illuminate\Http\JsonResponse
+    public function json(Request $request): JsonResponse
     {
-        $nodes = Node::select(['id', 'code', 'name', 'type', 'latitude', 'longitude', 'status'])
+        $nodes = Node::query()
+            ->select(['id', 'code', 'name', 'type', 'latitude', 'longitude', 'status', 'address'])
+            ->withCount(['devices', 'napBoxes'])
             ->when($request->filled('type'), fn($q) => $q->byType($request->input('type')))
             ->when($request->filled('active'), fn($q) => $q->where('status', 'active'))
-            ->get();
+            ->get()
+            ->map(fn (Node $node) => [
+                'id' => $node->id,
+                'code' => $node->code,
+                'name' => $node->name,
+                'type' => $node->type?->value,
+                'type_label' => $node->type?->label(),
+                'latitude' => $node->latitude !== null ? (float) $node->latitude : null,
+                'longitude' => $node->longitude !== null ? (float) $node->longitude : null,
+                'status' => $node->status?->value,
+                'status_label' => $node->status?->label(),
+                'address' => $node->address,
+                'devices_count' => $node->devices_count,
+                'nap_boxes_count' => $node->nap_boxes_count,
+            ]);
 
         return response()->json($nodes);
     }

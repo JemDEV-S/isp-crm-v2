@@ -61,25 +61,16 @@
                         icon="location-marker"
                     />
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <x-input
-                            name="latitude"
-                            label="Latitud"
-                            placeholder="-16.4090"
-                            :value="old('latitude', $napBox->latitude)"
-                            :error="$errors->first('latitude')"
-                            hint="Formato decimal"
-                        />
-
-                        <x-input
-                            name="longitude"
-                            label="Longitud"
-                            placeholder="-71.5374"
-                            :value="old('longitude', $napBox->longitude)"
-                            :error="$errors->first('longitude')"
-                            hint="Formato decimal"
-                        />
-                    </div>
+                    <x-geo-point-picker
+                        latitude-name="latitude"
+                        longitude-name="longitude"
+                        :latitude-value="old('latitude', $napBox->latitude)"
+                        :longitude-value="old('longitude', $napBox->longitude)"
+                        :latitude-error="$errors->first('latitude')"
+                        :longitude-error="$errors->first('longitude')"
+                        help="Ajusta la ubicacion exacta de la NAP desde el mapa o escribiendo las coordenadas."
+                        height="20rem"
+                    />
                 </div>
             </x-card>
 

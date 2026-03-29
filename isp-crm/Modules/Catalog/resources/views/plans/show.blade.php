@@ -242,9 +242,7 @@
                         @if($plan->created_by)
                             <div>
                                 <dt class="text-sm font-medium text-secondary-500">Creado por</dt>
-                                <dd class="mt-1 text-sm text-secondary-900">
-                                    {{ $plan->creator->name ?? 'N/A' }}
-                                </dd>
+                                <dd class="mt-1 text-sm text-secondary-900">{{ $plan->createdBy?->name ?? 'N/A' }}</dd>
                             </div>
                         @endif
                     </dl>

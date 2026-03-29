@@ -217,9 +217,9 @@
                                 <label class="flex items-start">
                                     <input
                                         type="checkbox"
-                                        name="promotions[]"
+                                        name="promotion_ids[]"
                                         value="{{ $promotion->id }}"
-                                        {{ in_array($promotion->id, old('promotions', [])) ? 'checked' : '' }}
+                                        {{ in_array($promotion->id, old('promotion_ids', [])) ? 'checked' : '' }}
                                         class="mt-1 rounded border-secondary-300 text-primary-600 shadow-sm focus:border-primary-500 focus:ring-primary-500"
                                     >
                                     <div class="ml-2">
@@ -246,9 +246,9 @@
                                 <label class="flex items-start">
                                     <input
                                         type="checkbox"
-                                        name="addons[]"
+                                        name="addon_ids[]"
                                         value="{{ $addon->id }}"
-                                        {{ in_array($addon->id, old('addons', [])) ? 'checked' : '' }}
+                                        {{ in_array($addon->id, old('addon_ids', [])) ? 'checked' : '' }}
                                         class="mt-1 rounded border-secondary-300 text-primary-600 shadow-sm focus:border-primary-500 focus:ring-primary-500"
                                     >
                                     <div class="ml-2">

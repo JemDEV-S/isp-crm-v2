@@ -114,27 +114,16 @@
                         icon="location-marker"
                     />
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <x-input
-                            name="latitude"
-                            label="Latitud"
-                            placeholder="-16.4090"
-                            :value="old('latitude')"
-                            :error="$errors->first('latitude')"
-                            required
-                            hint="Formato decimal"
-                        />
-
-                        <x-input
-                            name="longitude"
-                            label="Longitud"
-                            placeholder="-71.5374"
-                            :value="old('longitude')"
-                            :error="$errors->first('longitude')"
-                            required
-                            hint="Formato decimal"
-                        />
-                    </div>
+                    <x-geo-point-picker
+                        latitude-name="latitude"
+                        longitude-name="longitude"
+                        :latitude-value="old('latitude')"
+                        :longitude-value="old('longitude')"
+                        :latitude-error="$errors->first('latitude')"
+                        :longitude-error="$errors->first('longitude')"
+                        help="Haz clic sobre el mapa para ubicar la caja NAP o usa tu ubicacion actual."
+                        height="20rem"
+                    />
 
                     <div class="bg-info-50 border border-info-200 rounded-lg p-4">
                         <div class="flex gap-3">

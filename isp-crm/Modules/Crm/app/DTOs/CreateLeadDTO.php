@@ -31,8 +31,8 @@ final readonly class CreateLeadDTO
             documentNumber: $data['document_number'] ?? null,
             source: isset($data['source']) ? LeadSource::from($data['source']) : LeadSource::WALK_IN,
             notes: $data['notes'] ?? null,
-            zoneId: $data['zone_id'] ?? null,
-            assignedTo: $data['assigned_to'] ?? null,
+            zoneId: isset($data['zone_id']) && $data['zone_id'] !== '' ? (int) $data['zone_id'] : null,
+            assignedTo: isset($data['assigned_to']) && $data['assigned_to'] !== '' ? (int) $data['assigned_to'] : null,
         );
     }
 

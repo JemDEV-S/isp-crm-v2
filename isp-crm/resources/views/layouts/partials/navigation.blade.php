@@ -116,6 +116,13 @@
 @can('network.device.view')
 <x-nav-group label="Red" icon="network">
     <x-nav-item
+        href="{{ route('network.topology') }}"
+        :active="request()->routeIs('network.topology')"
+    >
+        Topologia
+    </x-nav-item>
+
+    <x-nav-item
         href="{{ route('network.nodes.index') }}"
         :active="request()->routeIs('network.nodes.*')"
     >

@@ -7,6 +7,8 @@ namespace Modules\Network\Entities;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Modules\Core\Traits\HasStatus;
+use Modules\Network\Enums\NodeStatus;
+use Modules\Network\Enums\NodeType;
 
 class Node extends Model
 {
@@ -32,6 +34,8 @@ class Node extends Model
      * The attributes that should be cast.
      */
     protected $casts = [
+        'type' => NodeType::class,
+        'status' => NodeStatus::class,
         'latitude' => 'decimal:7',
         'longitude' => 'decimal:7',
         'altitude' => 'decimal:2',
@@ -97,10 +101,10 @@ class Node extends Model
 
         $earthRadius = 6371000; // meters
 
-        $lat1 = deg2rad($this->latitude);
-        $lon1 = deg2rad($this->longitude);
-        $lat2 = deg2rad($node->latitude);
-        $lon2 = deg2rad($node->longitude);
+        $lat1 = deg2rad((float) $this->latitude);
+        $lon1 = deg2rad((float) $this->longitude);
+        $lat2 = deg2rad((float) $node->latitude);
+        $lon2 = deg2rad((float) $node->longitude);
 
         $deltaLat = $lat2 - $lat1;
         $deltaLon = $lon2 - $lon1;

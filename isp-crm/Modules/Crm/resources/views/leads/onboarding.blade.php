@@ -211,14 +211,24 @@
                 <x-card title="Factibilidad tecnica" subtitle="Use coordenadas del domicilio para consultar cobertura y disponibilidad de NAP.">
                     <form class="space-y-4" @submit.prevent="runFeasibilityCheck()">
                         <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-                            <x-input name="latitude" label="Latitud" type="number" step="0.0000001" x-model="forms.feasibility.latitude" placeholder="-12.046374" required />
-                            <x-input name="longitude" label="Longitud" type="number" step="0.0000001" x-model="forms.feasibility.longitude" placeholder="-77.042793" required />
                             <x-input name="radius_meters" label="Radio (m)" type="number" min="50" max="5000" x-model="forms.feasibility.radius_meters" />
                         </div>
 
+                        <x-geo-point-picker
+                            latitude-name="latitude"
+                            longitude-name="longitude"
+                            latitude-value="{{ $latestFeasibilityRequest?->latitude }}"
+                            longitude-value="{{ $latestFeasibilityRequest?->longitude }}"
+                            x-model-lat="forms.feasibility.latitude"
+                            x-model-lng="forms.feasibility.longitude"
+                            help="Haz clic sobre el mapa para fijar las coordenadas del domicilio o usa tu ubicacion actual."
+                            height="20rem"
+                        />
+
                         <div class="flex flex-wrap items-center gap-3">
                             <x-button type="submit" icon="map-pin" x-bind:disabled="loading.feasibility">Consultar factibilidad</x-button>
-                            <span class="text-sm text-secondary-500" x-show="feasibilityRequest?.requested_at" x-text="`Ultima solicitud: ${formatDate(feasibilityRequest.requested_at)}`"></span>
+                            <span class="text-sm text-secondary-500" x-show="feasibilityRequest?.requested_at" x-text="lastFeasibilityRequestLabel()"></span>
+                            <span class="text-sm text-secondary-500" x-show="forms.feasibility.latitude && forms.feasibility.longitude" x-text="`Punto actual: ${forms.feasibility.latitude}, ${forms.feasibility.longitude}`"></span>
                         </div>
                     </form>
 
@@ -234,8 +244,8 @@
                                 <x-badge x-show="feasibilityRequest && !isFeasible()" variant="danger" icon="exclamation-circle" style="display: none;">No factible</x-badge>
                             </div>
                             <p class="mt-3 text-sm text-secondary-600" x-show="feasibilityResult()?.reason" x-text="feasibilityResult()?.reason"></p>
-                            <p class="mt-3 text-sm text-secondary-600" x-show="feasibilityResult()?.distance_meters" x-text="`Distancia estimada: ${Math.round(feasibilityResult().distance_meters)} m`"></p>
-                            <p class="mt-1 text-sm text-secondary-600" x-show="feasibilityResult()?.available_naps_count !== undefined" x-text="`NAPs detectados: ${feasibilityResult().available_naps_count}`"></p>
+                            <p class="mt-3 text-sm text-secondary-600" x-show="feasibilityResult()?.distance_meters" x-text="distanceLabel()"></p>
+                            <p class="mt-1 text-sm text-secondary-600" x-show="feasibilityResult()?.available_naps_count !== undefined" x-text="availableNapsLabel()"></p>
                         </div>
 
                         <div class="rounded-xl border border-secondary-200 bg-white p-4">
@@ -264,7 +274,7 @@
 
                         <div class="flex flex-wrap items-center gap-3">
                             <x-button type="submit" variant="success" icon="clipboard" x-bind:disabled="loading.reservation">Reservar capacidad</x-button>
-                            <span class="text-sm text-secondary-500" x-show="activeReservation?.expires_at" x-text="`Expira: ${formatDate(activeReservation.expires_at)}`"></span>
+                            <span class="text-sm text-secondary-500" x-show="activeReservation?.expires_at" x-text="reservationExpiresLabel()"></span>
                         </div>
                     </form>
 
@@ -276,19 +286,19 @@
                         <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
                             <div>
                                 <p class="text-xs font-semibold uppercase tracking-wide text-secondary-500">Estado</p>
-                                <p class="mt-1 text-sm font-medium text-secondary-900" x-text="activeReservation.status"></p>
+                                <p class="mt-1 text-sm font-medium text-secondary-900" x-text="activeReservation?.status || '-'"></p>
                             </div>
                             <div>
                                 <p class="text-xs font-semibold uppercase tracking-wide text-secondary-500">Puerto reservado</p>
-                                <p class="mt-1 text-sm font-medium text-secondary-900" x-text="activeReservation.reservable_id"></p>
+                                <p class="mt-1 text-sm font-medium text-secondary-900" x-text="activeReservation?.reservable_id || '-'"></p>
                             </div>
                             <div>
                                 <p class="text-xs font-semibold uppercase tracking-wide text-secondary-500">NAP</p>
-                                <p class="mt-1 text-sm text-secondary-700" x-text="activeReservation.metadata?.nap_box_code || '-'"></p>
+                                <p class="mt-1 text-sm text-secondary-700" x-text="reservationNapLabel()"></p>
                             </div>
                             <div>
                                 <p class="text-xs font-semibold uppercase tracking-wide text-secondary-500">Puerto fisico</p>
-                                <p class="mt-1 text-sm text-secondary-700" x-text="activeReservation.metadata?.port_number || '-'"></p>
+                                <p class="mt-1 text-sm text-secondary-700" x-text="reservationPortLabel()"></p>
                             </div>
                         </div>
                     </div>
@@ -568,6 +578,36 @@
                         dateStyle: 'short',
                         timeStyle: 'short',
                     });
+                },
+
+                lastFeasibilityRequestLabel() {
+                    return this.feasibilityRequest?.requested_at
+                        ? `Ultima solicitud: ${this.formatDate(this.feasibilityRequest.requested_at)}`
+                        : '';
+                },
+
+                distanceLabel() {
+                    const distance = this.feasibilityResult()?.distance_meters;
+                    return distance ? `Distancia estimada: ${Math.round(distance)} m` : '';
+                },
+
+                availableNapsLabel() {
+                    const total = this.feasibilityResult()?.available_naps_count;
+                    return total !== undefined ? `NAPs detectados: ${total}` : '';
+                },
+
+                reservationExpiresLabel() {
+                    return this.activeReservation?.expires_at
+                        ? `Expira: ${this.formatDate(this.activeReservation.expires_at)}`
+                        : '';
+                },
+
+                reservationNapLabel() {
+                    return this.activeReservation?.metadata?.nap_box_code || '-';
+                },
+
+                reservationPortLabel() {
+                    return this.activeReservation?.metadata?.port_number || '-';
                 },
             };
         }

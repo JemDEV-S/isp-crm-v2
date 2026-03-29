@@ -5,302 +5,261 @@
 @section('breadcrumb')
     <span class="text-secondary-500">Servicios</span>
     <x-icon name="chevron-right" class="w-4 h-4 text-secondary-400" />
-    <a href="{{ route('subscriptions.index') }}" class="text-secondary-500 hover:text-secondary-700">
-        Suscripciones
-    </a>
+    <a href="{{ route('subscriptions.index') }}" class="text-secondary-500 hover:text-secondary-700">Suscripciones</a>
     <x-icon name="chevron-right" class="w-4 h-4 text-secondary-400" />
     <span class="text-secondary-900 font-medium">Nueva Suscripción</span>
 @endsection
 
 @section('content')
-    <div class="max-w-5xl mx-auto">
+    <div class="mx-auto max-w-5xl">
         <div class="mb-6">
             <h1 class="text-2xl font-bold text-secondary-900">Crear Nueva Suscripción</h1>
-            <p class="mt-1 text-sm text-secondary-500">
-                Registre una nueva suscripción de servicio para un cliente.
-            </p>
+            <p class="mt-1 text-sm text-secondary-500">Relaciona cliente, dirección y condiciones comerciales del servicio.</p>
         </div>
 
-        <form action="{{ route('subscriptions.store') }}" method="POST" x-data="subscriptionForm">
+        <form action="{{ route('subscriptions.store') }}" method="POST" x-data="subscriptionForm()">
             @csrf
 
-            <!-- Cliente y Plan -->
-            <x-card title="Cliente y Plan de Servicio" class="mb-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <x-select
-                            name="customer_id"
-                            label="Cliente"
-                            placeholder="Seleccione un cliente..."
-                            :error="$errors->first('customer_id')"
-                            required
-                            x-model="customerId"
-                            @change="loadCustomerAddresses()"
-                        >
-                            @foreach($customers as $customer)
-                                <option value="{{ $customer->id }}" {{ old('customer_id') == $customer->id ? 'selected' : '' }}>
-                                    {{ $customer->name }} - {{ $customer->document_number }}
-                                </option>
-                            @endforeach
-                        </x-select>
-                        <p class="mt-1 text-xs text-secondary-500">Seleccione el cliente que contratará el servicio</p>
-                    </div>
-
-                    <div>
-                        <x-select
-                            name="plan_id"
-                            label="Plan de Servicio"
-                            placeholder="Seleccione un plan..."
-                            :error="$errors->first('plan_id')"
-                            required
-                            x-model="planId"
-                            @change="updatePlanDetails()"
-                        >
-                            @foreach($plans as $plan)
-                                <option
-                                    value="{{ $plan->id }}"
-                                    data-price="{{ $plan->monthly_price }}"
-                                    data-download="{{ $plan->download_speed }}"
-                                    data-upload="{{ $plan->upload_speed }}"
-                                    {{ old('plan_id') == $plan->id ? 'selected' : '' }}
-                                >
-                                    {{ $plan->name }} - ${{ number_format($plan->monthly_price, 2) }}
-                                </option>
-                            @endforeach
-                        </x-select>
-                        <p class="mt-1 text-xs text-secondary-500">Plan de velocidad y precio</p>
-                    </div>
-                </div>
-
-                <div x-show="planId" class="mt-4 p-4 bg-primary-50 border border-primary-200 rounded-lg">
-                    <div class="flex items-center gap-3">
-                        <x-icon name="information-circle" class="w-5 h-5 text-primary-600 flex-shrink-0" />
-                        <div class="text-sm text-primary-700">
-                            <p class="font-medium">Plan seleccionado</p>
-                            <p class="mt-1">
-                                Velocidad: <span x-text="planDetails.download"></span> / <span x-text="planDetails.upload"></span> Mbps |
-                                Precio base: $<span x-text="planDetails.price"></span>
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </x-card>
-
-            <!-- Dirección de Servicio -->
-            <x-card title="Dirección de Instalación" class="mb-6">
-                <div class="grid grid-cols-1 gap-6">
+            <x-card title="Cliente y Plan" class="mb-6">
+                <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
                     <x-select
-                        name="service_address_id"
-                        label="Dirección del Servicio"
-                        placeholder="Seleccione una dirección..."
-                        :error="$errors->first('service_address_id')"
+                        name="customer_id"
+                        label="Cliente"
+                        :error="$errors->first('customer_id')"
                         required
+                        x-model="customerId"
+                        @change="loadCustomerAddresses()"
                     >
-                        @foreach($addresses as $address)
-                            <option value="{{ $address->id }}" {{ old('service_address_id') == $address->id ? 'selected' : '' }}>
-                                {{ $address->full_address }}
+                        <option value="">Seleccione un cliente...</option>
+                        @foreach($customers as $customer)
+                            <option value="{{ $customer->id }}" @selected((string) old('customer_id') === (string) $customer->id)>
+                                {{ $customer->getDisplayName() }} - {{ $customer->document_number }}
                             </option>
                         @endforeach
                     </x-select>
-                    <p class="mt-1 text-xs text-secondary-500">
-                        Dirección donde se instalará el servicio. Si no encuentra la dirección, créela primero desde el módulo de Clientes.
+
+                    <x-select
+                        name="plan_id"
+                        label="Plan"
+                        :error="$errors->first('plan_id')"
+                        required
+                        x-model="planId"
+                        @change="updatePlanDetails()"
+                    >
+                        <option value="">Seleccione un plan...</option>
+                        @foreach($plans as $plan)
+                            <option
+                                value="{{ $plan->id }}"
+                                data-price="{{ $plan->price }}"
+                                data-installation-fee="{{ $plan->installation_fee }}"
+                                data-download="{{ $plan->download_speed }}"
+                                data-upload="{{ $plan->upload_speed }}"
+                                @selected((string) old('plan_id') === (string) $plan->id)
+                            >
+                                {{ $plan->name }} - S/ {{ number_format($plan->price, 2) }}
+                            </option>
+                        @endforeach
+                    </x-select>
+                </div>
+
+                <div x-show="planId" class="mt-4 rounded-lg border border-primary-200 bg-primary-50 p-4">
+                    <p class="text-sm font-medium text-primary-800">Resumen comercial</p>
+                    <p class="mt-1 text-sm text-primary-700">
+                        Velocidad: <span x-text="planDetails.download"></span>/<span x-text="planDetails.upload"></span> Mbps
+                    </p>
+                    <p class="text-sm text-primary-700">
+                        Mensualidad: S/ <span x-text="planDetails.price"></span> |
+                        Instalación: S/ <span x-text="planDetails.installationFee"></span>
                     </p>
                 </div>
             </x-card>
 
-            <!-- Configuración de Facturación -->
-            <x-card title="Configuración de Facturación" class="mb-6">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <x-select
-                        name="billing_cycle"
-                        label="Ciclo de Facturación"
-                        :error="$errors->first('billing_cycle')"
+            <x-card title="Dirección del Servicio" class="mb-6">
+                <div>
+                    <label for="service_address_id" class="mb-1 block text-sm font-medium text-secondary-700">Dirección</label>
+                    <select
+                        id="service_address_id"
+                        name="service_address_id"
+                        x-model="serviceAddressId"
+                        class="block w-full rounded-lg border-secondary-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
                         required
                     >
-                        <option value="monthly" {{ old('billing_cycle', 'monthly') == 'monthly' ? 'selected' : '' }}>Mensual</option>
-                        <option value="quarterly" {{ old('billing_cycle') == 'quarterly' ? 'selected' : '' }}>Trimestral</option>
-                        <option value="semiannual" {{ old('billing_cycle') == 'semiannual' ? 'selected' : '' }}>Semestral</option>
-                        <option value="annual" {{ old('billing_cycle') == 'annual' ? 'selected' : '' }}>Anual</option>
+                        <option value="">Seleccione una dirección...</option>
+                        <template x-for="address in availableAddresses" :key="address.id">
+                            <option :value="address.id" x-text="address.label"></option>
+                        </template>
+                    </select>
+                    @error('service_address_id')
+                        <p class="mt-1 text-sm text-danger-600">{{ $message }}</p>
+                    @enderror
+                    <p class="mt-2 text-xs text-secondary-500">Solo se muestran direcciones de tipo servicio del cliente seleccionado.</p>
+                </div>
+            </x-card>
+
+            <x-card title="Facturación y Permanencia" class="mb-6">
+                <div class="grid grid-cols-1 gap-6 md:grid-cols-4">
+                    <x-select name="billing_cycle" label="Ciclo" :error="$errors->first('billing_cycle')" required>
+                        <option value="monthly" @selected(old('billing_cycle', 'monthly') === 'monthly')>Mensual</option>
+                        <option value="quarterly" @selected(old('billing_cycle') === 'quarterly')>Trimestral</option>
+                        <option value="semiannual" @selected(old('billing_cycle') === 'semiannual')>Semestral</option>
+                        <option value="annual" @selected(old('billing_cycle') === 'annual')>Anual</option>
                     </x-select>
 
                     <x-input
                         type="number"
                         name="billing_day"
-                        label="Día de Facturación"
-                        placeholder="15"
+                        label="Día facturación"
                         :value="old('billing_day', 1)"
                         :error="$errors->first('billing_day')"
                         min="1"
                         max="28"
                         required
-                        hint="Día del mes para generar facturas (1-28)"
                     />
 
                     <x-input
                         type="date"
                         name="start_date"
-                        label="Fecha de Inicio"
+                        label="Inicio"
                         :value="old('start_date', date('Y-m-d'))"
                         :error="$errors->first('start_date')"
                         required
-                        hint="Fecha de inicio del servicio"
                     />
-                </div>
 
-                <div class="mt-4 p-4 bg-info-50 border border-info-200 rounded-lg">
-                    <div class="flex gap-3">
-                        <x-icon name="information-circle" class="w-5 h-5 text-info-600 flex-shrink-0" />
-                        <div class="text-sm text-info-700">
-                            <p class="font-medium">Sobre el día de facturación</p>
-                            <p class="mt-1">El sistema generará facturas automáticamente el día seleccionado de cada mes según el ciclo configurado.</p>
-                        </div>
-                    </div>
+                    <x-input
+                        type="number"
+                        name="contracted_months"
+                        label="Permanencia"
+                        :value="old('contracted_months')"
+                        :error="$errors->first('contracted_months')"
+                        min="1"
+                        max="60"
+                        hint="Opcional, en meses"
+                    />
                 </div>
             </x-card>
 
-            <!-- Addons Opcionales -->
-            <x-card title="Servicios Adicionales (Opcional)" class="mb-6">
+            <x-card title="Servicios Adicionales" class="mb-6">
                 <div class="space-y-3">
                     @forelse($addons as $addon)
-                        <div class="flex items-center justify-between p-4 border border-secondary-200 rounded-lg hover:bg-secondary-50">
+                        <label class="flex items-center justify-between rounded-lg border border-secondary-200 p-4 hover:bg-secondary-50">
                             <div class="flex items-center gap-3">
                                 <input
                                     type="checkbox"
                                     name="addon_ids[]"
                                     value="{{ $addon->id }}"
-                                    id="addon_{{ $addon->id }}"
-                                    class="w-4 h-4 text-primary-600 border-secondary-300 rounded focus:ring-primary-500"
-                                    {{ in_array($addon->id, old('addon_ids', [])) ? 'checked' : '' }}
+                                    class="rounded border-secondary-300 text-primary-600 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                                    @checked(in_array($addon->id, old('addon_ids', [])))
                                 >
-                                <label for="addon_{{ $addon->id }}" class="flex-1 cursor-pointer">
+                                <div>
                                     <div class="font-medium text-secondary-900">{{ $addon->name }}</div>
                                     @if($addon->description)
                                         <div class="text-sm text-secondary-500">{{ $addon->description }}</div>
                                     @endif
-                                </label>
-                            </div>
-                            <div class="text-right">
-                                <div class="text-sm font-semibold text-secondary-900">
-                                    +${{ number_format($addon->price, 2) }}
-                                </div>
-                                <div class="text-xs text-secondary-500">
-                                    @if($addon->billing_type === 'recurring')
-                                        /mes
-                                    @else
-                                        único
-                                    @endif
                                 </div>
                             </div>
-                        </div>
+                            <div class="text-right text-sm font-semibold text-secondary-900">
+                                S/ {{ number_format($addon->price, 2) }}
+                                <div class="text-xs font-normal text-secondary-500">{{ $addon->is_recurring ? 'Recurrente' : 'Único' }}</div>
+                            </div>
+                        </label>
                     @empty
-                        <div class="text-center py-6 text-sm text-secondary-500">
-                            No hay servicios adicionales disponibles
-                        </div>
+                        <p class="text-sm text-secondary-500">No hay addons activos disponibles.</p>
                     @endforelse
                 </div>
-                @error('addon_ids')
-                    <p class="mt-2 text-sm text-danger-600">{{ $message }}</p>
-                @enderror
             </x-card>
 
-            <!-- Promoción -->
-            <x-card title="Promoción (Opcional)" class="mb-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <x-select
-                        name="promotion_id"
-                        label="Aplicar Promoción"
-                        placeholder="Sin promoción"
-                        :error="$errors->first('promotion_id')"
-                    >
+            <x-card title="Promoción y Notas" class="mb-6">
+                <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                    <x-select name="promotion_id" label="Promoción" :error="$errors->first('promotion_id')">
+                        <option value="">Sin promoción</option>
                         @foreach($promotions as $promotion)
-                            <option value="{{ $promotion->id }}" {{ old('promotion_id') == $promotion->id ? 'selected' : '' }}>
-                                {{ $promotion->name }}
-                                @if($promotion->discount_type === 'percentage')
-                                    - {{ $promotion->discount_value }}% descuento
-                                @else
-                                    - ${{ number_format($promotion->discount_value, 2) }} descuento
-                                @endif
+                            <option value="{{ $promotion->id }}" @selected((string) old('promotion_id') === (string) $promotion->id)>
+                                {{ $promotion->name }} - {{ $promotion->formatted_discount }}
                             </option>
                         @endforeach
                     </x-select>
 
-                    <x-input
-                        name="promotion_code"
-                        label="Código de Promoción"
-                        placeholder="PROMO2024"
-                        :value="old('promotion_code')"
-                        :error="$errors->first('promotion_code')"
-                        hint="Ingrese código promocional si aplica"
-                    />
+                    <div>
+                        <label for="notes" class="mb-1 block text-sm font-medium text-secondary-700">Notas internas</label>
+                        <textarea
+                            id="notes"
+                            name="notes"
+                            rows="4"
+                            class="block w-full rounded-lg border-secondary-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                            placeholder="Observaciones comerciales, coordinación o acuerdos..."
+                        >{{ old('notes') }}</textarea>
+                        @error('notes')
+                            <p class="mt-1 text-sm text-danger-600">{{ $message }}</p>
+                        @enderror
+                    </div>
                 </div>
             </x-card>
 
-            <!-- Observaciones -->
-            <x-card title="Observaciones" class="mb-6">
-                <div>
-                    <label for="notes" class="block text-sm font-medium text-secondary-700 mb-1">
-                        Notas Internas
-                    </label>
-                    <textarea
-                        name="notes"
-                        id="notes"
-                        rows="3"
-                        class="block w-full rounded-lg shadow-sm border-secondary-300 focus:border-primary-500 focus:ring-primary-500"
-                        placeholder="Información adicional sobre la suscripción..."
-                    >{{ old('notes') }}</textarea>
-                    @error('notes')
-                        <p class="mt-1 text-sm text-danger-600">{{ $message }}</p>
-                    @enderror
-                </div>
-            </x-card>
-
-            <!-- Botones de Acción -->
-            <div class="flex items-center justify-end gap-3 sticky bottom-0 bg-white/80 backdrop-blur py-4 border-t border-secondary-200 mt-8">
+            <div class="sticky bottom-0 mt-8 flex items-center justify-end gap-3 border-t border-secondary-200 bg-white/80 py-4 backdrop-blur">
                 <a href="{{ route('subscriptions.index') }}">
                     <x-button variant="ghost" type="button">Cancelar</x-button>
                 </a>
-                <x-button type="submit" variant="primary" icon="check">
-                    Crear Suscripción
-                </x-button>
+                <x-button type="submit" icon="check">Crear Suscripción</x-button>
             </div>
         </form>
     </div>
 
     @push('scripts')
-    <script>
-        document.addEventListener('alpine:init', () => {
-            Alpine.data('subscriptionForm', () => ({
-                customerId: '{{ old("customer_id") }}',
-                planId: '{{ old("plan_id") }}',
-                planDetails: {
-                    price: '0.00',
-                    download: '0',
-                    upload: '0'
-                },
+        <script>
+            document.addEventListener('alpine:init', () => {
+                Alpine.data('subscriptionForm', () => ({
+                    addressesByCustomer: @js($addressesByCustomer),
+                    customerId: '{{ old('customer_id') }}',
+                    planId: '{{ old('plan_id') }}',
+                    serviceAddressId: '{{ old('service_address_id') }}',
+                    planDetails: {
+                        price: '0.00',
+                        installationFee: '0.00',
+                        download: '0',
+                        upload: '0'
+                    },
 
-                init() {
-                    if (this.planId) {
+                    get availableAddresses() {
+                        return this.addressesByCustomer[this.customerId] ?? [];
+                    },
+
+                    init() {
                         this.updatePlanDetails();
-                    }
-                },
+                        this.ensureSelectedAddress();
+                    },
 
-                updatePlanDetails() {
-                    const select = this.$el.querySelector(`select[name="plan_id"]`);
-                    if (select && select.selectedIndex > 0) {
-                        const option = select.options[select.selectedIndex];
-                        this.planDetails.price = parseFloat(option.dataset.price).toFixed(2);
-                        this.planDetails.download = option.dataset.download;
-                        this.planDetails.upload = option.dataset.upload;
-                    }
-                },
+                    updatePlanDetails() {
+                        const select = this.$el.querySelector('select[name="plan_id"]');
+                        const option = select?.options[select.selectedIndex];
 
-                loadCustomerAddresses() {
-                    // Esta función podría hacer una llamada AJAX para cargar las direcciones del cliente
-                    // Por ahora, solo muestra las direcciones que ya están cargadas
-                    console.log('Customer selected:', this.customerId);
-                }
-            }));
-        });
-    </script>
+                        if (!option?.dataset?.price) {
+                            this.planDetails = { price: '0.00', installationFee: '0.00', download: '0', upload: '0' };
+                            return;
+                        }
+
+                        this.planDetails = {
+                            price: Number(option.dataset.price).toFixed(2),
+                            installationFee: Number(option.dataset.installationFee || 0).toFixed(2),
+                            download: option.dataset.download,
+                            upload: option.dataset.upload,
+                        };
+                    },
+
+                    loadCustomerAddresses() {
+                        this.ensureSelectedAddress();
+                    },
+
+                    ensureSelectedAddress() {
+                        const exists = this.availableAddresses.some(address => String(address.id) === String(this.serviceAddressId));
+                        if (exists) {
+                            return;
+                        }
+
+                        const fallback = this.availableAddresses.find(address => address.is_default) ?? this.availableAddresses[0];
+                        this.serviceAddressId = fallback ? String(fallback.id) : '';
+                    }
+                }));
+            });
+        </script>
     @endpush
 @endsection

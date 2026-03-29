@@ -98,14 +98,16 @@
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-secondary-900">
                             {{ $node->name }}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-secondary-900">
-                            {{ $node->type->label() }}
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <x-badge variant="default" size="sm">{{ $node->type->label() }}</x-badge>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-secondary-900">
                             {{ $node->address }}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            {{ $node->status->label() }}
+                            <x-badge :variant="$node->status->value === 'active' ? 'success' : ($node->status->value === 'maintenance' ? 'warning' : 'danger')" dot>
+                                {{ $node->status->label() }}
+                            </x-badge>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div class="flex-justify-end-items-center gap-2">

@@ -68,10 +68,10 @@
                         :error="$errors->first('document_type')"
                     >
                         <option value="">Seleccione...</option>
-                        <option value="dni" {{ old('document_type', $lead->document_type) === 'dni' ? 'selected' : '' }}>DNI</option>
-                        <option value="ruc" {{ old('document_type', $lead->document_type) === 'ruc' ? 'selected' : '' }}>RUC</option>
-                        <option value="ce" {{ old('document_type', $lead->document_type) === 'ce' ? 'selected' : '' }}>Carné de Extranjería</option>
-                        <option value="passport" {{ old('document_type', $lead->document_type) === 'passport' ? 'selected' : '' }}>Pasaporte</option>
+                        <option value="dni" {{ old('document_type', $lead->document_type?->value) === 'dni' ? 'selected' : '' }}>DNI</option>
+                        <option value="ruc" {{ old('document_type', $lead->document_type?->value) === 'ruc' ? 'selected' : '' }}>RUC</option>
+                        <option value="ce" {{ old('document_type', $lead->document_type?->value) === 'ce' ? 'selected' : '' }}>Carné de Extranjería</option>
+                        <option value="passport" {{ old('document_type', $lead->document_type?->value) === 'passport' ? 'selected' : '' }}>Pasaporte</option>
                     </x-select>
 
                     <x-input

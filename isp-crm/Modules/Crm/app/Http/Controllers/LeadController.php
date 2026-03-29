@@ -68,7 +68,15 @@ class LeadController extends Controller
 
     public function show(Lead $lead)
     {
-        $lead->load(['zone', 'assignedUser', 'createdByUser', 'customer', 'duplicateOf']);
+        $lead->load([
+            'zone',
+            'assignedUser',
+            'createdByUser',
+            'customer',
+            'duplicateOf',
+            'feasibilityRequests' => fn ($query) => $query->latest('requested_at'),
+        ]);
+
         return view('crm::leads.show', compact('lead'));
     }
 

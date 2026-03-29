@@ -7,10 +7,12 @@ namespace Modules\Crm\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Modules\AccessControl\Entities\Zone;
 use Modules\Crm\DTOs\CreateCustomerDTO;
 use Modules\Crm\Entities\Customer;
 use Modules\Crm\Enums\CustomerType;
 use Modules\Crm\Enums\DocumentType;
+use Modules\Crm\Enums\ContactType;
 use Modules\Crm\Services\CustomerService;
 
 class CustomerController extends Controller
@@ -28,17 +30,21 @@ class CustomerController extends Controller
 
         $stats = $this->customerService->getStats();
 
-        return view('crm::customers.index', compact('customers', 'stats'));
+        return view('crm::customers.index', [
+            'customers' => $customers,
+            'stats' => $stats,
+            'zones' => Zone::query()->orderBy('name')->get(['id', 'name']),
+        ]);
     }
 
     public function create()
     {
-        return view('crm::customers.create');
+        return view('crm::customers.create', $this->getCustomerFormOptions());
     }
 
     public function edit(Customer $customer)
     {
-        return view('crm::customers.edit', compact('customer'));
+        return view('crm::customers.edit', array_merge(compact('customer'), $this->getCustomerFormOptions()));
     }
 
     public function store(Request $request)
@@ -54,9 +60,47 @@ class CustomerController extends Controller
             'billing_email' => 'nullable|email|max:100',
             'credit_limit' => 'nullable|numeric|min:0',
             'tax_exempt' => 'nullable|boolean',
+            'service_address' => 'nullable|array',
+            'service_address.label' => 'nullable|string|max:50',
+            'service_address.street' => 'required_with:service_address|string|max:200',
+            'service_address.number' => 'nullable|string|max:20',
+            'service_address.floor' => 'nullable|string|max:10',
+            'service_address.apartment' => 'nullable|string|max:20',
+            'service_address.reference' => 'nullable|string',
+            'service_address.address_reference' => 'nullable|string',
+            'service_address.photo_url' => 'nullable|url|max:255',
+            'service_address.district' => 'required_with:service_address|string|max:100',
+            'service_address.city' => 'required_with:service_address|string|max:100',
+            'service_address.province' => 'required_with:service_address|string|max:100',
+            'service_address.postal_code' => 'nullable|string|max:10',
+            'service_address.latitude' => 'nullable|numeric',
+            'service_address.longitude' => 'nullable|numeric',
+            'service_address.zone_id' => 'nullable|exists:zones,id',
+            'primary_contact' => 'nullable|array',
+            'primary_contact.name' => 'required_with:primary_contact|string|max:100',
+            'primary_contact.relationship' => 'nullable|string|max:50',
+            'primary_contact.type' => 'required_with:primary_contact|string|in:phone,email,whatsapp',
+            'primary_contact.value' => 'required_with:primary_contact|string|max:100',
+            'primary_contact.receives_notifications' => 'nullable|boolean',
         ]);
 
         $customer = $this->customerService->create(CreateCustomerDTO::fromArray($validated));
+
+        if (!empty($validated['service_address']['street'] ?? null)) {
+            $this->customerService->addAddress($customer, [
+                ...$validated['service_address'],
+                'type' => 'service',
+                'is_default' => true,
+            ]);
+        }
+
+        if (!empty($validated['primary_contact']['value'] ?? null)) {
+            $customer->contacts()->create([
+                ...$validated['primary_contact'],
+                'is_primary' => true,
+                'receives_notifications' => (bool) ($validated['primary_contact']['receives_notifications'] ?? false),
+            ]);
+        }
 
         return redirect()->route('crm.customers.show', $customer)
             ->with('success', 'Cliente creado exitosamente');
@@ -223,5 +267,15 @@ class CustomerController extends Controller
         return response()->json([
             'data' => $customers,
         ]);
+    }
+
+    protected function getCustomerFormOptions(): array
+    {
+        return [
+            'customerTypes' => CustomerType::toArray(),
+            'documentTypes' => DocumentType::toArray(),
+            'contactTypes' => ContactType::toArray(),
+            'zones' => Zone::query()->orderBy('name')->get(['id', 'name']),
+        ];
     }
 }

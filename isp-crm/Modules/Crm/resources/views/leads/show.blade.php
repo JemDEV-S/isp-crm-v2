@@ -2,6 +2,18 @@
 
 @section('title', 'Detalle del Prospecto')
 
+@php
+    $statusVariant = match ($lead->status->value) {
+        'new' => 'info',
+        'contacted' => 'primary',
+        'qualified', 'proposal_sent', 'negotiating' => 'warning',
+        'won' => 'success',
+        'lost' => 'danger',
+        default => 'default',
+    };
+    $latestFeasibilityRequest = $lead->feasibilityRequests->first();
+@endphp
+
 @section('breadcrumb')
     <span class="text-secondary-500">CRM</span>
     <svg class="w-4 h-4 text-secondary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -16,255 +28,147 @@
 
 @section('content')
     <div class="space-y-6">
-        <!-- Header con Título y Acciones -->
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
                 <h1 class="text-2xl font-bold text-secondary-900">{{ $lead->name }}</h1>
-                <div class="flex items-center gap-2 mt-1">
-                    @php
-                        $statusColors = [
-                            'new' => 'info',
-                            'contacted' => 'primary',
-                            'qualified' => 'warning',
-                            'proposal_sent' => 'warning',
-                            'negotiating' => 'warning',
-                            'won' => 'success',
-                            'lost' => 'danger',
-                        ];
-                    @endphp
-                    <x-badge :variant="$statusColors[$lead->status] ?? 'default'" dot>
-                        {{ ucfirst(str_replace('_', ' ', $lead->status)) }}
-                    </x-badge>
-                    <x-badge variant="default" size="sm">
-                        {{ ucfirst(str_replace('_', ' ', $lead->source)) }}
-                    </x-badge>
+                <div class="mt-2 flex flex-wrap items-center gap-2">
+                    <x-badge :variant="$statusVariant" dot>{{ $lead->status->label() }}</x-badge>
+                    <x-badge variant="default" size="sm">{{ $lead->source?->label() ?? 'Sin fuente' }}</x-badge>
+                    @if($lead->is_duplicate)
+                        <x-badge variant="warning" size="sm">Posible duplicado</x-badge>
+                    @endif
+                    @if($lead->isConverted())
+                        <x-badge variant="success" size="sm">Convertido</x-badge>
+                    @endif
                 </div>
             </div>
+
             <div class="flex gap-2">
-                @if(!$lead->converted_at)
-                    @can('crm.lead.view')
-                        <a href="{{ route('crm.leads.onboarding', $lead) }}">
-                            <x-button variant="primary" icon="clipboard">Proceso de Alta</x-button>
-                        </a>
-                    @endcan
-                    @can('crm.lead.convert')
-                        <a href="#" @click.prevent="$dispatch('open-modal', 'convert-lead')">
-                            <x-button variant="success" icon="check-circle">Convertir a Cliente</x-button>
-                        </a>
-                    @endcan
-                    @can('crm.lead.update')
-                        <a href="{{ route('crm.leads.edit', $lead) }}">
-                            <x-button variant="secondary" icon="pencil">Editar</x-button>
-                        </a>
-                    @endcan
-                @else
-                    <x-badge variant="success" size="lg" icon="check-circle">
-                        Convertido
-                    </x-badge>
+                @if(!$lead->isConverted())
+                    <a href="{{ route('crm.leads.onboarding', $lead) }}">
+                        <x-button variant="primary" icon="clipboard">Proceso de Alta</x-button>
+                    </a>
+                    <a href="{{ route('crm.leads.edit', $lead) }}">
+                        <x-button variant="secondary" icon="pencil">Editar</x-button>
+                    </a>
                 @endif
             </div>
         </div>
 
-        <!-- Layout de 2 columnas -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Columna Principal (2/3) -->
-            <div class="lg:col-span-2 space-y-6">
-                <x-card title="Información de Contacto">
-                    <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+        <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div class="space-y-6 lg:col-span-2">
+                <x-card title="Contacto">
+                    <dl class="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div>
-                            <dt class="text-sm font-medium text-secondary-500">Nombre Completo</dt>
+                            <dt class="text-sm font-medium text-secondary-500">Nombre</dt>
                             <dd class="mt-1 text-sm text-secondary-900">{{ $lead->name }}</dd>
                         </div>
                         <div>
                             <dt class="text-sm font-medium text-secondary-500">Teléfono</dt>
-                            <dd class="mt-1 text-sm text-secondary-900">
-                                <a href="tel:{{ $lead->phone }}" class="text-primary-600 hover:text-primary-900">
-                                    {{ $lead->phone }}
-                                </a>
-                            </dd>
+                            <dd class="mt-1 text-sm text-secondary-900">{{ $lead->phone }}</dd>
                         </div>
                         @if($lead->email)
-                        <div>
-                            <dt class="text-sm font-medium text-secondary-500">Correo Electrónico</dt>
-                            <dd class="mt-1 text-sm text-secondary-900">
-                                <a href="mailto:{{ $lead->email }}" class="text-primary-600 hover:text-primary-900">
-                                    {{ $lead->email }}
-                                </a>
-                            </dd>
-                        </div>
+                            <div>
+                                <dt class="text-sm font-medium text-secondary-500">Correo</dt>
+                                <dd class="mt-1 text-sm text-secondary-900">{{ $lead->email }}</dd>
+                            </div>
                         @endif
                         @if($lead->document_type && $lead->document_number)
-                        <div>
-                            <dt class="text-sm font-medium text-secondary-500">Documento</dt>
-                            <dd class="mt-1 text-sm text-secondary-900">
-                                {{ strtoupper($lead->document_type) }}: {{ $lead->document_number }}
-                            </dd>
-                        </div>
+                            <div>
+                                <dt class="text-sm font-medium text-secondary-500">Documento</dt>
+                                <dd class="mt-1 text-sm text-secondary-900">{{ $lead->document_type->label() }} · {{ $lead->document_number }}</dd>
+                            </div>
                         @endif
                     </dl>
                 </x-card>
 
                 @if($lead->notes)
-                <x-card title="Notas">
-                    <p class="text-sm text-secondary-700 whitespace-pre-wrap">{{ $lead->notes }}</p>
-                </x-card>
+                    <x-card title="Notas">
+                        <p class="whitespace-pre-wrap text-sm text-secondary-700">{{ $lead->notes }}</p>
+                    </x-card>
                 @endif
 
-                @if($lead->converted_at && $lead->customer)
-                <x-card title="Cliente Convertido">
-                    <x-alert variant="success">
-                        Este prospecto fue convertido a cliente el {{ $lead->converted_at->format('d/m/Y H:i') }}
-                    </x-alert>
-                    <div class="mt-4">
-                        <a href="{{ route('crm.customers.show', $lead->customer) }}">
-                            <x-button icon="arrow-right">Ver Cliente</x-button>
-                        </a>
-                    </div>
-                </x-card>
+                @if($latestFeasibilityRequest && $latestFeasibilityRequest->latitude && $latestFeasibilityRequest->longitude)
+                    <x-card title="Ubicacion Tecnica">
+                        <div class="mb-4 flex flex-wrap items-center gap-2">
+                            <x-badge :variant="$latestFeasibilityRequest->status === 'confirmed' ? 'success' : ($latestFeasibilityRequest->status === 'rejected' ? 'danger' : 'warning')" size="sm">
+                                {{ ucfirst($latestFeasibilityRequest->status) }}
+                            </x-badge>
+                            <span class="text-xs text-secondary-500">
+                                Ultima solicitud: {{ $latestFeasibilityRequest->requested_at?->format('d/m/Y H:i') ?? '-' }}
+                            </span>
+                        </div>
+
+                        <x-geo-point-picker
+                            latitude-name="latitude"
+                            longitude-name="longitude"
+                            :latitude-value="$latestFeasibilityRequest->latitude"
+                            :longitude-value="$latestFeasibilityRequest->longitude"
+                            help="Ubicacion usada en la ultima evaluacion tecnica del lead."
+                            height="18rem"
+                            :readonly="true"
+                            :show-inputs="false"
+                        />
+                    </x-card>
+                @endif
+
+                @if($lead->isConverted() && $lead->customer)
+                    <x-card title="Resultado Comercial">
+                        <p class="text-sm text-secondary-600">Este lead fue convertido el {{ $lead->converted_at->format('d/m/Y H:i') }}.</p>
+                        <div class="mt-4">
+                            <a href="{{ route('crm.customers.show', $lead->customer) }}">
+                                <x-button icon="arrow-right">Abrir cliente</x-button>
+                            </a>
+                        </div>
+                    </x-card>
                 @endif
             </div>
 
-            <!-- Sidebar (1/3) -->
             <div class="space-y-6">
-                <x-card title="Información del Prospecto">
+                <x-card title="Resumen Comercial">
                     <dl class="space-y-4">
                         <div>
                             <dt class="text-sm font-medium text-secondary-500">Fuente</dt>
-                            <dd class="mt-1 text-sm text-secondary-900">
-                                {{ ucfirst(str_replace('_', ' ', $lead->source)) }}
-                            </dd>
+                            <dd class="mt-1 text-sm text-secondary-900">{{ $lead->source?->label() ?? 'Sin fuente' }}</dd>
                         </div>
                         <div>
                             <dt class="text-sm font-medium text-secondary-500">Estado</dt>
                             <dd class="mt-1">
-                                <x-badge :variant="$statusColors[$lead->status] ?? 'default'" dot>
-                                    {{ ucfirst(str_replace('_', ' ', $lead->status)) }}
-                                </x-badge>
+                                <x-badge :variant="$statusVariant" dot>{{ $lead->status->label() }}</x-badge>
                             </dd>
                         </div>
-                        @if($lead->zone)
                         <div>
                             <dt class="text-sm font-medium text-secondary-500">Zona</dt>
-                            <dd class="mt-1 text-sm text-secondary-900">{{ $lead->zone->name }}</dd>
+                            <dd class="mt-1 text-sm text-secondary-900">{{ $lead->zone?->name ?? 'Sin zona' }}</dd>
                         </div>
-                        @endif
-                        @if($lead->assignedUser)
                         <div>
                             <dt class="text-sm font-medium text-secondary-500">Asignado a</dt>
-                            <dd class="mt-1 text-sm text-secondary-900">{{ $lead->assignedUser->name }}</dd>
+                            <dd class="mt-1 text-sm text-secondary-900">{{ $lead->assignedUser?->name ?? 'Sin asignar' }}</dd>
                         </div>
-                        @endif
                     </dl>
                 </x-card>
 
-                <x-card title="Información del Sistema">
+                <x-card title="Sistema">
                     <dl class="space-y-4">
                         <div>
                             <dt class="text-sm font-medium text-secondary-500">UUID</dt>
-                            <dd class="mt-1 text-xs text-secondary-900 font-mono break-all">{{ $lead->uuid }}</dd>
+                            <dd class="mt-1 break-all font-mono text-xs text-secondary-900">{{ $lead->uuid }}</dd>
                         </div>
                         <div>
-                            <dt class="text-sm font-medium text-secondary-500">Fecha de creación</dt>
-                            <dd class="mt-1 text-sm text-secondary-900">
-                                {{ $lead->created_at->format('d/m/Y H:i') }}
-                            </dd>
+                            <dt class="text-sm font-medium text-secondary-500">Creado</dt>
+                            <dd class="mt-1 text-sm text-secondary-900">{{ $lead->created_at->format('d/m/Y H:i') }}</dd>
                         </div>
                         <div>
-                            <dt class="text-sm font-medium text-secondary-500">Última actualización</dt>
-                            <dd class="mt-1 text-sm text-secondary-900">
-                                {{ $lead->updated_at->format('d/m/Y H:i') }}
-                            </dd>
+                            <dt class="text-sm font-medium text-secondary-500">Actualizado</dt>
+                            <dd class="mt-1 text-sm text-secondary-900">{{ $lead->updated_at->format('d/m/Y H:i') }}</dd>
                         </div>
-                        @if($lead->createdByUser)
                         <div>
                             <dt class="text-sm font-medium text-secondary-500">Creado por</dt>
-                            <dd class="mt-1 text-sm text-secondary-900">{{ $lead->createdByUser->name }}</dd>
+                            <dd class="mt-1 text-sm text-secondary-900">{{ $lead->createdByUser?->name ?? 'Sistema' }}</dd>
                         </div>
-                        @endif
                     </dl>
                 </x-card>
-
-                @if(!$lead->converted_at)
-                <x-card title="Acciones">
-                    <div class="space-y-2">
-                        <a href="{{ route('crm.leads.onboarding', $lead) }}" class="block">
-                            <x-button variant="secondary" class="w-full" icon="clipboard">Abrir Proceso de Alta</x-button>
-                        </a>
-                        @can('crm.lead.update')
-                            <a href="{{ route('crm.leads.edit', $lead) }}" class="block">
-                                <x-button variant="outline" class="w-full" icon="pencil">Editar</x-button>
-                            </a>
-                        @endcan
-                        @can('crm.lead.convert')
-                            <a href="#" @click.prevent="$dispatch('open-modal', 'convert-lead')" class="block">
-                                <x-button variant="success" class="w-full" icon="check-circle">
-                                    Convertir a Cliente
-                                </x-button>
-                            </a>
-                        @endcan
-                        @can('crm.lead.delete')
-                            <form action="{{ route('crm.leads.destroy', $lead) }}" method="POST"
-                                  onsubmit="return confirm('¿Estás seguro de eliminar este prospecto?')">
-                                @csrf
-                                @method('DELETE')
-                                <x-button type="submit" variant="danger" class="w-full" icon="trash">
-                                    Eliminar
-                                </x-button>
-                            </form>
-                        @endcan
-                    </div>
-                </x-card>
-                @endif
             </div>
         </div>
     </div>
-
-    <!-- Modal de Conversión -->
-    @push('modals')
-        <x-modal name="convert-lead" title="Convertir Prospecto a Cliente" maxWidth="2xl">
-            <form action="{{ route('crm.leads.convert', $lead) }}" method="POST">
-                @csrf
-                <div class="space-y-4">
-                    <x-alert variant="info">
-                        Al convertir este prospecto se creará un nuevo cliente con la información proporcionada.
-                    </x-alert>
-
-                    <div class="grid grid-cols-2 gap-4">
-                        <x-select name="customer_type" label="Tipo de Cliente" required>
-                            <option value="personal">Personal</option>
-                            <option value="business">Empresa</option>
-                        </x-select>
-
-                        <x-select name="document_type" label="Tipo de Documento" required>
-                            <option value="dni">DNI</option>
-                            <option value="ruc">RUC</option>
-                            <option value="ce">Carné de Extranjería</option>
-                            <option value="passport">Pasaporte</option>
-                        </x-select>
-
-                        <div class="col-span-2">
-                            <x-input name="document_number" label="Número de Documento" required />
-                        </div>
-
-                        <div class="col-span-2">
-                            <x-input name="trade_name" label="Nombre Comercial (Opcional)" />
-                        </div>
-
-                        <div class="col-span-2">
-                            <x-input type="email" name="billing_email" label="Email de Facturación (Opcional)" />
-                        </div>
-                    </div>
-                </div>
-
-                <x-slot name="footer">
-                    <x-button variant="ghost" type="button" @click="$dispatch('close-modal', 'convert-lead')">
-                        Cancelar
-                    </x-button>
-                    <x-button type="submit" variant="success" icon="check-circle">
-                        Convertir a Cliente
-                    </x-button>
-                </x-slot>
-            </form>
-        </x-modal>
-    @endpush
 @endsection

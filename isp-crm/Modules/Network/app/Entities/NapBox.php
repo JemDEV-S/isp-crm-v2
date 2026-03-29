@@ -96,8 +96,8 @@ class NapBox extends Model
     {
         $earthRadius = 6371000; // meters
 
-        $lat1 = deg2rad($this->latitude);
-        $lon1 = deg2rad($this->longitude);
+        $lat1 = deg2rad((float) $this->latitude);
+        $lon1 = deg2rad((float) $this->longitude);
         $lat2 = deg2rad($latitude);
         $lon2 = deg2rad($longitude);
 

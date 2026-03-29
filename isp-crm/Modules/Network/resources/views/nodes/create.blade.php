@@ -91,24 +91,6 @@
 
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <x-input
-                            name="latitude"
-                            label="Latitud"
-                            placeholder="-16.4090"
-                            :value="old('latitude')"
-                            :error="$errors->first('latitude')"
-                            hint="Formato decimal"
-                        />
-
-                        <x-input
-                            name="longitude"
-                            label="Longitud"
-                            placeholder="-71.5374"
-                            :value="old('longitude')"
-                            :error="$errors->first('longitude')"
-                            hint="Formato decimal"
-                        />
-
-                        <x-input
                             name="altitude"
                             label="Altitud (msnm)"
                             type="number"
@@ -117,6 +99,17 @@
                             :error="$errors->first('altitude')"
                         />
                     </div>
+
+                    <x-geo-point-picker
+                        latitude-name="latitude"
+                        longitude-name="longitude"
+                        :latitude-value="old('latitude')"
+                        :longitude-value="old('longitude')"
+                        :latitude-error="$errors->first('latitude')"
+                        :longitude-error="$errors->first('longitude')"
+                        help="Haz clic sobre el mapa para registrar la ubicacion del nodo o usa tu ubicacion actual."
+                        height="20rem"
+                    />
                 </div>
             </x-card>
 

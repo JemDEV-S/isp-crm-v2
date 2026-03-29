@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Modules\Crm\Services;
 
+use BackedEnum;
 use Illuminate\Support\Collection;
 use Modules\Crm\Entities\Lead;
 
@@ -95,20 +96,32 @@ class DuplicateDetectionService
         return $matchedBy;
     }
 
-    protected function normalizeText(?string $value): ?string
+    protected function normalizeText(mixed $value): ?string
     {
-        $value = $value !== null ? trim(mb_strtolower($value)) : null;
+        if ($value instanceof BackedEnum) {
+            $value = $value->value;
+        }
 
-        return $value !== '' ? $value : null;
-    }
-
-    protected function normalizePhone(?string $value): ?string
-    {
         if ($value === null) {
             return null;
         }
 
-        $normalized = preg_replace('/\D+/', '', $value);
+        $value = trim(mb_strtolower((string) $value));
+
+        return $value !== '' ? $value : null;
+    }
+
+    protected function normalizePhone(mixed $value): ?string
+    {
+        if ($value instanceof BackedEnum) {
+            $value = $value->value;
+        }
+
+        if ($value === null) {
+            return null;
+        }
+
+        $normalized = preg_replace('/\D+/', '', (string) $value);
 
         return $normalized !== '' ? $normalized : null;
     }

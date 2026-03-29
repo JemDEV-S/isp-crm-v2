@@ -16,8 +16,8 @@
             <div>
                 <h1 class="text-2xl font-bold text-secondary-900">{{ $node->name }}</h1>
                 <div class="flex items-center gap-2 mt-1">
-                    <x-badge :variant="$node->status === 'active' ? 'success' : 'default'">
-                        {{ $node->type->name }} - {{ $node->status->name }}
+                    <x-badge :variant="$node->status->value === 'active' ? 'success' : ($node->status->value === 'maintenance' ? 'warning' : 'danger')">
+                        {{ $node->type->label() }} - {{ $node->status->label() }}
                     </x-badge>
                     <span class="text-sm text-secondary-500 flex items-center gap-1">
                         <x-icon name="location-marker" class="w-4 h-4" /> {{ $node->address }}
@@ -115,18 +115,21 @@
 
             <div class="space-y-6">
                 @if($node->latitude && $node->longitude)
-                <x-card :padding="false" class="overflow-hidden">
-                    <iframe
-                        width="100%"
-                        height="250"
-                        frameborder="0"
-                        style="border:0"
-                        src="https://maps.google.com/maps?q={{ $node->latitude }},{{ $node->longitude }}&z=15&output=embed">
-                    </iframe>
-                    <div class="p-3 bg-gray-50 text-xs text-center text-secondary-600">
-                        Lat: {{ $node->latitude }} | Lon: {{ $node->longitude }}
-                    </div>
-                </x-card>
+                    <x-card title="Ubicacion">
+                        <x-geo-point-picker
+                            latitude-name="latitude"
+                            longitude-name="longitude"
+                            :latitude-value="$node->latitude"
+                            :longitude-value="$node->longitude"
+                            help="Vista de la ubicacion registrada para este nodo."
+                            height="18rem"
+                            :readonly="true"
+                            :show-inputs="false"
+                        />
+                        <div class="mt-3 text-xs text-center text-secondary-600">
+                            Lat: {{ $node->latitude }} | Lon: {{ $node->longitude }}
+                        </div>
+                    </x-card>
                 @endif
 
                 <x-card title="Detalles Técnicos">

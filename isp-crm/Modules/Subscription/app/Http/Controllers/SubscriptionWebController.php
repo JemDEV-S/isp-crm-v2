@@ -8,10 +8,10 @@ use App\Http\Controllers\Controller;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Modules\Customer\Entities\Customer;
-use Modules\Plan\Entities\Plan;
-use Modules\Plan\Entities\Addon;
-use Modules\Promotion\Entities\Promotion;
+use Modules\Catalog\Entities\Addon;
+use Modules\Catalog\Entities\Plan;
+use Modules\Catalog\Entities\Promotion;
+use Modules\Crm\Entities\Customer;
 use Modules\Subscription\DTOs\CreateSubscriptionDTO;
 use Modules\Subscription\Entities\Subscription;
 use Modules\Subscription\Services\SubscriptionService;
@@ -26,26 +26,10 @@ class SubscriptionWebController extends Controller
     {
         $filters = $request->only(['status', 'customer_id', 'plan_id', 'billing_day', 'billing_cycle', 'search']);
 
-        $subscriptions = Subscription::query()
-            ->with(['customer', 'plan', 'serviceAddress'])
-            ->when($filters['status'] ?? null, fn($q, $status) => $q->where('status', $status))
-            ->when($filters['plan_id'] ?? null, fn($q, $planId) => $q->where('plan_id', $planId))
-            ->when($filters['billing_cycle'] ?? null, fn($q, $cycle) => $q->where('billing_cycle', $cycle))
-            ->when($filters['billing_day'] ?? null, fn($q, $day) => $q->where('billing_day', $day))
-            ->when($filters['search'] ?? null, function($q, $search) {
-                $q->where('subscription_code', 'like', "%{$search}%")
-                  ->orWhereHas('customer', fn($q) => $q->where('name', 'like', "%{$search}%"));
-            })
-            ->latest()
-            ->paginate(15);
-
-        $plans = Plan::where('is_active', true)->get();
-
-        $stats = [
-            'active' => Subscription::where('status', 'active')->count(),
-            'pending' => Subscription::where('status', 'pending')->count(),
-            'suspended' => Subscription::where('status', 'suspended')->count(),
-            'monthly_revenue' => Subscription::where('status', 'active')->sum('monthly_price'),
+        $subscriptions = $this->subscriptionService->paginate($filters, 15);
+        $plans = Plan::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']);
+        $stats = $this->subscriptionService->getStats() + [
+            'monthly_revenue' => Subscription::query()->where('status', 'active')->sum('monthly_price'),
         ];
 
         return view('subscription::index', compact('subscriptions', 'plans', 'filters', 'stats'));
@@ -53,16 +37,29 @@ class SubscriptionWebController extends Controller
 
     public function create(): View
     {
-        $customers = Customer::where('is_active', true)->get();
-        $plans = Plan::where('is_active', true)->get();
-        $addons = Addon::where('is_active', true)->get();
-        $promotions = Promotion::where('is_active', true)
-            ->where('start_date', '<=', now())
-            ->where(fn($q) => $q->whereNull('end_date')->orWhere('end_date', '>=', now()))
+        $customers = Customer::query()
+            ->where('is_active', true)
+            ->with(['addresses' => fn ($query) => $query->service()->orderByDesc('is_default')->orderBy('id')])
+            ->orderBy('name')
             ->get();
-        $addresses = collect(); // Will be loaded via AJAX based on customer selection
+        $plans = Plan::query()->where('is_active', true)->orderBy('name')->get();
+        $addons = Addon::query()->where('is_active', true)->orderBy('name')->get();
+        $promotions = Promotion::query()
+            ->valid()
+            ->orderBy('name')
+            ->get();
 
-        return view('subscription::create', compact('customers', 'plans', 'addons', 'promotions', 'addresses'));
+        $addressesByCustomer = $customers
+            ->mapWithKeys(fn (Customer $customer) => [
+                $customer->id => $customer->addresses->map(fn ($address) => [
+                    'id' => $address->id,
+                    'label' => $address->getFullAddress(),
+                    'is_default' => (bool) $address->is_default,
+                ])->values()->all(),
+            ])
+            ->all();
+
+        return view('subscription::create', compact('customers', 'plans', 'addons', 'promotions', 'addressesByCustomer'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -74,8 +71,8 @@ class SubscriptionWebController extends Controller
             'billing_day' => 'required|integer|min:1|max:28',
             'billing_cycle' => 'required|string|in:monthly,quarterly,semiannual,annual',
             'start_date' => 'nullable|date',
+            'contracted_months' => 'nullable|integer|min:1|max:60',
             'promotion_id' => 'nullable|exists:promotions,id',
-            'promotion_code' => 'nullable|string',
             'addon_ids' => 'nullable|array',
             'addon_ids.*' => 'exists:addons,id',
             'notes' => 'nullable|string',
@@ -91,6 +88,7 @@ class SubscriptionWebController extends Controller
                 'start_date' => $validated['start_date'] ?? null,
                 'promotion_id' => $validated['promotion_id'] ?? null,
                 'addons' => $validated['addon_ids'] ?? [],
+                'contracted_months' => $validated['contracted_months'] ?? null,
                 'notes' => $validated['notes'] ?? null,
             ]));
 
@@ -109,12 +107,14 @@ class SubscriptionWebController extends Controller
         $subscription->load([
             'customer',
             'plan',
-            'serviceAddress',
+            'address.zone',
+            'serviceInstance.ipAddress',
             'serviceInstance.napPort.napBox',
             'addons',
             'promotion',
-            'statusHistory',
-            'notes',
+            'statusHistory.user',
+            'notes.user',
+            'planChangeRequests',
         ]);
 
         return view('subscription::show', compact('subscription'));
@@ -122,7 +122,7 @@ class SubscriptionWebController extends Controller
 
     public function edit(Subscription $subscription): View
     {
-        $subscription->load(['customer', 'plan', 'serviceAddress']);
+        $subscription->load(['customer.addresses', 'plan', 'address']);
 
         $addresses = $subscription->customer->addresses;
 
@@ -136,13 +136,31 @@ class SubscriptionWebController extends Controller
             'billing_day' => 'required|integer|min:1|max:28',
             'billing_cycle' => 'required|string|in:monthly,quarterly,semiannual,annual',
             'start_date' => 'nullable|date',
+            'contracted_months' => 'nullable|integer|min:1|max:60',
             'monthly_price' => 'nullable|numeric|min:0',
             'discount_percentage' => 'nullable|numeric|min:0|max:100',
             'notes' => 'nullable|string',
         ]);
 
         try {
-            $subscription->update($validated);
+            $updateData = [
+                'address_id' => $validated['service_address_id'],
+                'billing_day' => $validated['billing_day'],
+                'billing_cycle' => $validated['billing_cycle'],
+                'start_date' => $validated['start_date'] ?? null,
+                'contracted_months' => $validated['contracted_months'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+            ];
+
+            if (array_key_exists('monthly_price', $validated) && $validated['monthly_price'] !== null) {
+                $updateData['monthly_price'] = $validated['monthly_price'];
+            }
+
+            if (array_key_exists('discount_percentage', $validated) && $validated['discount_percentage'] !== null) {
+                $updateData['discount_percentage'] = $validated['discount_percentage'];
+            }
+
+            $subscription->update($updateData);
 
             return redirect()
                 ->route('subscriptions.show', $subscription)

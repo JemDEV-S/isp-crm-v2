@@ -15,6 +15,7 @@ use Modules\Network\Http\Controllers\NodeController;
 
 Route::middleware(['auth'])->prefix('network')->name('network.')->group(function () {
     // Nodes
+    Route::get('topology', [NodeController::class, 'topology'])->name('topology');
     Route::get('nodes/json', [NodeController::class, 'json'])->name('nodes.json');
     Route::resource('nodes', NodeController::class);
 
